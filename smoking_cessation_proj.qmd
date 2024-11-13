@@ -1,0 +1,1853 @@
+---
+title: \small \vspace{-.5cm} Variable Selection and Regression Analysis of Smoking Cessation Outcomes Using Regularization$\colon$
+subtitle: \small \vspace{-.1cm} A Reanalysis of the BASC-Varenicline Trial Data
+#author: \small Tom Arnold
+#date: today
+#date-format: long
+format:
+  pdf:
+    fontsize: "10.5pt"
+editor: source
+bibliography: references.bib
+header-includes:
+- \usepackage{pdflscape}
+- \input{geometry-settings.tex}
+- \input{float-setup.tex}
+- \input{column-commands.tex}
+- \input{table-packages.tex}
+- \input{title-settings.tex}
+- \setlength{\textfloatsep}{10pt plus 1.0pt minus 2.0pt}
+- \setlength{\intextsep}{10pt plus 1.0pt minus 2.0pt}
+- \setlength{\tabcolsep}{5.5pt} # Default size is usually 6
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r setup, include = FALSE, message = FALSE}
+# --- Preamble ---
+# Date of last update: Nov. 11, 2024
+# R Version: 4.3.1
+# Package Versions:
+#   tidyverse: 2.0.0
+#   knitr: 1.45
+#   kableExtra: 1.3.4
+#   ggplot2: 3.4.3
+#   naniar 1.0.0
+#   visdat 0.6.0
+#   car 3.1-2
+#   lme4 1.1-34
+#   ggpubr 0.6.0
+#   library(glmnet)
+#   library(mice)
+#   library(caret)
+
+
+setwd("~/GitHub/smoking_cessation_proj")
+
+# Knitr Engine Setup
+knitr::opts_chunk$set(message=F, 
+                      warning=F, 
+                      error=F, 
+                      echo=F, 
+                      fig.pos = "H" ,
+                      fig.align = 'center')
+
+# Packages
+options(kableExtra.latex.load_packages = FALSE) # Required to avoid floatrow error
+library(knitr)
+library(kableExtra)
+library(ggplot2)
+library(naniar) # For mcar_test()
+library(visdat) # For vis_dat()
+library(tidyverse)
+library(car) # For qqPlot(), vif()
+library(lme4)
+library(lmerTest) # Satterthwaite approximation for computing p-values on lme4
+library(ggpubr)
+library(glmnet)
+library(mice)
+library(caret)
+library(pROC)
+
+#library(Hmisc)
+#library(vcd)
+
+
+source("_helpers.R")
+
+```
+
+
+::: {.content-hidden}
+Note: "vspace" below reduces space between title and first paragraph. 
+:::
+\vspace{-3cm} 
+
+# Abstract
+
+**TODO**
+Background: Individuals with past or present major depressive disorder (MDD) experience unique barriers to smoking cessation. While varenicline has been shown to be more effective than traditional nicotine replacement therapy in achieving abstinence for individuals with and without MDD, its lower efficacy for those with MDD suggests that MDD-responsive treatment strategies are necessary. A recent determined that varenicline improved abstinence, but BASC did not, either with or without varenicline. In light of this result, we use data from this study to examine baseline variables as potential predictors of end-of-treatment abstinence and moderators of behavioral treatment's effect thereon.
+
+Methods: We examine data from a randomized, placebo-controlled 2x2 factorial design study of 300 smokers with past or present MDD, who received either placebo or varenicline and standard treatment (ST) or behavioral activation for smoking cessation (BASC). Missing data was imputed through multiple imputation. A cross-validated lasso was applied at the optimally chosen value of lamda for five imputed data sets within n-many bootstrap re-samples. We set aside 20% of the sample for validation. 
+
+
+Results: **TODO** 
+
+Conclusion: 
+* lasso identified moderators, predictors “with moderatly good discrimination power”
+* Limitations include the limited sample size, which produced multiple problems including convergence issues, and class imbalance. ***
+**TODO** 
+
+
+# Introduction
+
+**TODO - make less detailed**
+More than 30% of individuals with major depressive disorder (MDD) are daily smokers [@han2022trends; @smith2020cigarette; @weinberger2020trends]. These individuals experience certain characteristic barriers to smoking cessation. Compared to smokers without MDD, they tend to be more likely to smoke heavily, to experience greater dependence on smoking, and to consider smoking to be more rewarding than other activities; it may thus be unsurprising that smokers with MDD experience more severe withdrawal symptoms [@breslau1992nicotine; @spring2003reward; @weinberger2010nicotine; @lyons2008twin]. Smoking relapse is also associated with lower experience of reward and cognition, both of which tend to be impaired among those diagnosed with MDD [@leventhal2009relations; @cook2010effects; @patterson2009varenicline]. Even past MDD adversely affects smoking cessation treatment outcomes [@hitsman2013past]. 
+
+Perhaps because of these challenges, individuals with MDD have typically been excluded from smoking treatment clinical trials [@hitsman2003history; @hitsman2013past; @talukder2023inequity]. Only six trials have explored smoking cessation in individuals with MDD [@evins2008controlled; @anthenelli2013effects; @thorsteinsson2001effects; @hall2006treatment; @minami2022pilot; @hitsman2023efficacy], two of which had sample sizes of fewer than 50 participants [@thorsteinsson2001effects; @minami2022pilot]. 
+
+Additional research evaluating approaches to smoking cessation in this population is necessary. One such approach is treatment with varenicline, a pharmaceutical intervention shown to lessen cravings, withdrawal, withdrawal-related cognitive impairment, and reward from smoking [@patterson2009varenicline; @hitsman2013dissociable; @perkins2010varenicline; @sofuoglu2009varenicline; @west2008effect; @mcclure2012effects; @cinciripini2013effects]. While cessation with varenicline was higher in smokers without any mental health disorders [@anthenelli2016neuropsychiatric], one trial of varenicline for individuals with MDD found greater abstinence versus placebo at 52 weeks (28.5% vs. 17.5%) [@anthenelli2013effects]. However, individuals with mental health disorders, including MDD, are more likely to be prescribed nicotine replacement therapy, a comparatively less effective therapy, than varenicline [@anthenelli2016neuropsychiatric; @taylor2020prescribing]. This hesitance to prescribing varenicline may stem from a prior boxed warning that, as of 2016, has been removed based on studies evincing the safety of varenicline for individuals with and without mental health disorders [@anthenelli2016neuropsychiatric]. 
+
+The data in our study is derived from a recent randomized, placebo-controlled trial which examined whether the effectiveness of varenicline for smoking cessation in adults with current or past MDD is enhanced by behavioral activation for smoking cessation (BASC) [@hitsman2023efficacy]. Behavioral activation (BA) increases reward experience and decreases avoidance-based coping [35-37 @cuijpers2007behavioral; @dimidjian2011origins; @hopko2003contemporary; @macpherson2010randomized]. A prior pilot study indicated that individuals with elevated depression symptoms, but not MDD, had better cessation results at 26 weeks with BA and nicotine replacement therapy compared to those with standard behavioral treatment (ST) and nicotine replacement therapy (14.3% vs. 0%) [@macpherson2010randomized]. 
+
+The Hitsman study from which we draw our data uses a 2x2 factorial design, with 300 participants with past or present MDD treated, over 12 weeks, with BASC or ST alongside placebo or varenciline. Although the Hitsman study found that BASC did not outperform ST with respect to abstinence at 27 weeks, with or without varenicline, it did find that varenicline improved short- and longer-term abstinence compared to placebo [@hitsman2023efficacy]. The dual goals of our analysis of the @hitsman2023efficacy data will be to assess whether and how baseline variables (1) moderate behavioral treatment's effect on end-of-treatment (EOT) abstinence and (2) predict EOT abstinence, controlling for pharmaceutical and behavioral treatments.
+
+In order to accomplish these dual goals, we use regularized linear models. Regularization, also known as shrinkage, reduces variance by fitting a model with all p predictors, with the estimated coefficients shrunken towards zero relative to the least square estimates [@hastie2009introduction; pp. 204]. We use this technique here because our goal can be understood as a variable selection problem. The lasso method of regularization, which comepls some of the coefficients to be exactly equal to zero, can also be used for variable selection [@hastie2009introduction; pp. 204, 219]. Best subset regression seeks the optimal subset of predictors by evaluating all possible combinations, thereby ensuring selection of the model with the lowest prediction error, although at a computational cost that increases exponentially with the number of predictors [@hazimeh2020fast; @hastie2015statistical]. In contrast, L0+L2 regularization combines the sparsity-promoting L0 penalty, which counts the number of non-zero coefficients, with the L2 penalty that shrinks coefficients towards zero without zeroing them, effectively balancing variable selection with the need to manage multicollinearity and enhance model accuracy [@hazimeh2020fast; @hastie2015statistical; @paul2550presentation]. The relaxed lasso, a modification of the lasso method, initially applies the lasso to determine a subset of variables by shrinking some coefficients to zero, then refits these selected variables with a reduced or absent lasso penalty, potentially reducing bias while retaining the variable selection advantage of the original lasso approach [@meinshausen2007relaxed]. L0+L2 and relaxed lasso are considered the best trade-offs between variable selection and goodness of fit [@paul2550presentation]. Best subset, L0+L2, and relaxed lasso are more computationally difficult than standard lasso. 
+
+
+
+
+::: {.content-hidden}
+
+:::
+
+
+
+# Methods
+
+
+## Variables
+
+First, we note that all covariates, other than abstinence (`abst`), are baseline variables. The following variables are binary: pharmacotherapy (`Var`); psychotherapy (`BA`); sex (`sex_ps`); indicators of whether the participant identifies as non-Hispanic white, Black, and/or Hispanic (`NHW`, `Black`, and `Hisp`); whether the individual smokes within five minutes of waking up (`ftcd.5.mins`); other lifetime DSM-5 diagnosis (`otherdiag`); whether the participant takes antidepressant medication (`antidepmed`); current or past MDD (`mde_curr`); and exclusive use of methylated cigarettes (`Only.Menthol`). The numeric variables are age (`age_ps`); cigarettes per day (`cpd_ps`); and Nicotine Metabolism Ratio (`NMR`). All remaining variables are ordinal. However, we treat income (`inc`) and education (`edu`) as ordinal, but (as we discuss below) treat the following variables as numeric: FTCD score (`ftcd_score`); `bdi_score_pq1`; cigarette reward value (`crv_total_pg1`); substitute reinforcer score (`hedonsum_n_pq1`); complementary reinforcer score (`hedonsum_y_pq1`); anhedonia (`shaps_score_pg1`); and readiness to quit smoking (`readiness`).
+
+The `ftcd_score` is the participant's score on the Fagerstrom Test for Cigarette Dependence, a six-item survey intended to evaluate the quantity of cigarette consumption, dependence, and compulsion to smoke; answers are scored and summed to yield a total score of 0-10, with higher scores indicating a greater physical dependence on nicotine [@fagerstrom2011determinants].
+
+The `bdi_score_pq1` is the participant's score on the Beck Depression Inventory, or BDI-II, a 21-item survey scored from 0 to 63 measuring the severity of depression, with higher scores indicating greater severity [@beck1996beck].
+
+The `crv_total_pq1` score measures the participant's score on a questionnaire measuring preference for smoking over other traditionally rewarding activities, measured on a scale of 0 to 15, where 1 point is added for each time the participant chooses smoking [@spring2003reward].
+
+Substitute and complimentary reinforcer scores (`hedonsum_n_pq1` and `hedonsum_y_pg1`) come from a participant's score of the cross-product of frequency (measured from 0 to 2) and level of enjoyableness (0 to 2) for a 45-item version of the Pleasant Events Schedule [@macphillamy1982pleasant]; based on the participant's report of whether an event is or is not associated with smoking, it is designated a complementary or substitute reinforcer, the cross products of which are summed.  
+
+Anhedonia (`shaps_score_pq1`) is assessed with the 14-item Snaith-Hamilton Pleasure Scale (SHAPS), where 14 statements are ranked on a 4-point Likert scale, with higher scores indicating greater enjoyment of typically rewarding experiences [@snaith1995scale].
+
+Nicotine metabolism ratio, otherwise known as nicotine metabolite ratio (`NMR`), is calculated as the ratio of 3'hydroxycotinine [3HC] to cotinine; `NMR` is a biomarker where higher `NMR` is associated with faster metabolism of nicotine [@siegel2020use]. 
+
+
+## Exploratory Data Analysis 
+
+The original paper uses a 2x2 factorial design. However, we choose to keep the treatment variables separate because the sample size is very small and further reducing the sample size to the four groups at issue would significantly limit the Lasso's ability to fit the data. That the 2x2 factorial design is not necessary to answer the research question validates our choice.
+
+In addition to summary statistics available in Tables 1, 2, and 3 and the correlation matrix, we also inspect univariate histograms (omitted for space) for all variables. Bivariate plots with the outcome are omitted because the outcome is binary. We note that there is still the assumption that there is a linear relationship between the log odds of predictors and the outcome. 
+
+We note that certain survey variables, specifically `ftcd_score`, `crv_total_pq1`, `readiness`, `shaps_score_pq1`, `hedonsum_y_pq1`, and `hedonsum_n_pq1` are ordinal but will be treated here as either numeric integers or continuous for the purpose of the modeling. This presents a limitation in that we are treating ordinal variables as evenly spaced. Doing so is more or less justifiable for different variables. For example, we are more justified in treating `hedonsum_y_pq1` and `hedonsuum_n_pq1` as continuous, given that each score is made up of the product of two ordinal scales; by using the cross-product, the study authors have made some assumptions about relative scale that obfuscates the ordinal nature of the original. 
+
+Nevertheless, treating these variables as ordinal is untenable here, as it would make individual cell sizes incredibly small and lead to parameter proliferation in modeling. Another potential solution would be grouping ordinal variables into discernible levels, as with `inc`, discussed below, but this would take an in-depth understanding of the meaning and spacing for each score that we do not have at present. Said another way, grouping the variables without fully understanding how relative distance between ordinal levels is expressed would lead to our making similar assumptions about the spacing between levels as we make in treating the variables as continuous. We note this is consistent with the handling of survey score variables in Table 1 of the original paper.
+
+To ameliorate the potential loss of accurate fit from treating ordinal variables as numeric, we use polynomial fit for each variable, allowing non-linearities between the log odds ratio for these variables and the outcome. The default contrast handling for ordinal covariates in R is a polynomial contrast. Applying the polynomial score transformation approximates this relationship, without incurring the cost of a parameter for all but one level of the variable. 
+
+Other notable decisions include: to omit `Hisp` due to insufficient sample size (18 individuals), which is a limitation of our analysis. We considered taking the three race and ethnicity variables `NHW`, `Black`, and `Hisp` and producing a single race plus ethnicity variable with mutually exclusive groups for non-hispanic white, non-hispanic Black, Hispanic, and Other. However because there are only 18 individuals noted as `Hisp` (and only two of those individuals are `Black`), this hypothetical combined race plus ethnicity variable would've suffered from the same cell size issue as other factors with many levels. 
+
+We further note that based on our correlation matrix there is a very high correlation (well over 85%) between `NHW` and `Black`. This issue combined with the issue noted previously lead us to also drop the `NHW` variable. We also note that use of only menthol cigarettes is highly correlated with both `NHW`, `Black`, `inc`, and `edu`. This is a concern, but as menthol cigarette use may be a unique trait and we are conducting regularized regression, we elect to leave this variable in the model and allow the penalty to aid our choice. 
+
+We conclude by grouping levels of `edu` and `inc` to limit parameter proliferation and allow for estimation and model convergence, given that Table 1 shows that there is insufficient sample within each level when not grouped. And, to take the log of the one true continuous variable, `NMR`, to encourage normality. Regarding the last decision, we do not assume normality, but note that normalizing transformations can encourage convergence and simplify the loss landscape. We note that use of only menthol cigarettes is highly correlated with both `NHW`, `Black`, `inc`, and `edu`.
+
+Finally, we note that there is a minor class imbalance issue (~2.1:10). The outcome is somewhat rare, and this could lead to model fitting issues. Correcting for this class imbalance is a potential area for improvement and a limitation.
+
+
+
+
+```{r read-in and clean}
+data <- read.csv("data/project2.csv", comment.char="#")
+
+
+
+```
+
+
+
+```{r}
+
+
+# Convert variables to appropriate types and levels
+data <- data %>%
+  mutate(
+    abst = factor(abst, levels = c(0, 1), labels = c("No", "Yes")), # This should be a factor for tables, but changed back to a binary numeric 0/1 for glmnet
+    Var = factor(Var, levels = c(0, 1),
+                         labels = c("Placebo", "Varenicline")), 
+    BA = factor(BA, levels = c(0, 1), labels = c("Standard", "BA")),
+    age_ps = as.numeric(age_ps),
+    sex_ps = factor(sex_ps, levels = c(1, 2), labels = c("Male", "Female")),
+    NHW = factor(NHW, levels = c(0, 1), labels = c("No", "Yes")),
+    Black = factor(Black, levels = c(0, 1), labels = c("No", "Yes")),
+    Hisp = factor(Hisp, levels = c(0, 1), labels = c("No", "Yes")),
+    inc = factor(inc, levels = 1:5,
+                 labels = c("Less than $20,000",
+                            "$20,000–35,000",
+                            "$35,001–50,000",
+                            "$50,001–75,000",
+                            "More than $75,000"), ordered = TRUE),
+    edu = factor(edu, levels = 1:5,
+                 labels = c("Grade School",
+                            "Some High School",
+                            "High School Graduate/GED",
+                            "Some College/Technical School", 
+                            "College Graduate"), ordered = TRUE),
+    ftcd_score = as.integer(ftcd_score), # This variable is actually ordinal not numeric, so this is one of the variables that should have poly() applied
+    ftcd.5.mins = factor(ftcd.5.mins, levels = c(0, 1), labels = c("No", "Yes")),
+    bdi_score_w00 = as.integer(bdi_score_w00), # This variable is actually ordinal not numeric, so this is one of the variables that should have poly() applied
+    cpd_ps = as.integer(cpd_ps),
+    crv_total_pq1 = as.integer(crv_total_pq1), # This variable is actually ordinal not numeric, so this is one of the variables that should have poly() applied
+    hedonsum_n_pq1 = as.integer(hedonsum_n_pq1), # This variable is actually ordinal not numeric, so this is one of the variables that should have poly() applied
+    hedonsum_y_pq1 = as.integer(hedonsum_y_pq1), # This variable is actually ordinal not numeric, so this is one of the variables that should have poly() applied
+    shaps_score_pq1 = as.integer(shaps_score_pq1), # This variable is actually ordinal not numeric, so this is one of the variables that should have poly() applied
+    otherdiag = factor(otherdiag, levels = c(0, 1), labels = c("No", "Yes")),
+    antidepmed = factor(antidepmed, levels = c(0, 1), labels = c("No", "Yes")),
+    mde_curr = factor(mde_curr, levels = c(0, 1), labels = c("Past", "Current")),
+    NMR = as.numeric(NMR),
+    Only.Menthol = factor(Only.Menthol, levels = c(0, 1), labels = c("No", "Yes")),
+    readiness = as.integer(readiness) # This variable is actually ordinal not numeric, so this is one of the variables that should have poly() applied
+  )
+
+
+```
+
+
+
+
+
+   
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+#| label: tbl-1
+#| tbl-cap: "Summary of Variables" 
+# Note: using tbl-cap rather than caption= in kbl() breaks repeated title is span page
+
+
+# Table 1
+summary_table(data[-1]) %>%
+  kbl(#caption = "Summary of Variables", # Conflicts with Quarto referencing
+      booktabs = T,
+      longtable = T, # LONGTABLE
+      escape = T,
+      align = "c") %>%
+  column_spec(1, width="2.2cm", latex_valign = "m") %>%
+  column_spec(2, width="1.3cm", latex_valign = "m") %>%
+  column_spec(3, width="4.5cm", latex_valign = "m") %>%
+  column_spec(4, width="1.0cm", latex_valign = "m") %>%
+  column_spec(5, width="1.0cm", latex_valign = "m") %>%
+  column_spec(6, width="1.25cm", latex_valign = "m") %>%
+  column_spec(7, width="1.25cm", latex_valign = "m") %>%
+  kable_styling(
+    font_size = 8, # Added for LONGTABLE
+    latex_options = c(#'HOLD_position', # Removed for LONGTABLE
+    #'scale_down', # Removed for LONGTABLE
+    "repeat_header",  # Added for LONGTABLE
+    'striped'), 
+    full_width = F, # Note: TRUE does not work with LONGTABLE
+    position = 'center'# Added for LONGTABLE
+  ) %>%
+  footnote(general = "Shapiro-Wilk test for normality;
+             Grubb's test for outliers.", escape = F)
+
+
+```
+
+
+
+```{r table 2}
+#| label: tbl-2
+#| tbl-cap: "Summary of Variables by Outcome"
+
+# Table 2
+summary_table(data[-1], stratify_var = "abst") %>%
+  kbl(
+      booktabs = T,
+      longtable = T, # LONGTABLE
+      escape = T,
+      align = "c") %>% 
+  column_spec(1, width="2.21cm", latex_valign = "m") %>%
+  column_spec(2, width="4cm", latex_valign = "m") %>%
+  column_spec(3, width="4cm", latex_valign = "m") %>%
+  column_spec(4, width=".35cm", latex_valign = "m") %>%
+  kable_styling(
+    font_size = 7.6, # Added for LONGTABLE
+    latex_options = c(#'HOLD_position', # Removed for LONGTABLE
+    #'scale_down', # Removed for LONGTABLE
+    "repeat_header",  # Added for LONGTABLE
+    'striped'), 
+    full_width = F, # Note: TRUE does not work with LONGTABLE
+    position = 'center'# Added for LONGTABLE
+  ) %>%
+  footnote(general = "ns = P > 0.05,
+           * = P $\\\\leq$ 0.05,
+           ** = P $\\\\leq$ 0.01,
+           *** = P $\\\\leq$ 0.001,
+           **** = P $\\\\leq$ 0.0001
+           ", escape = F) %>%
+  footnote(general = "Kruskal–Wallis test for continuous variables,
+           Chi-Square test for categorical variables. 
+           Bonferroni correction applied.", escape = F) 
+
+```
+
+
+
+
+```{r table 3}
+#| label: tbl-3
+#| tbl-cap: "Summary of Variables by BA"
+
+# Table 2
+summary_table(data[-1], stratify_var = "BA") %>%
+  kbl(
+      booktabs = T,
+      longtable = T, # LONGTABLE
+      escape = T,
+      align = "c") %>% 
+  column_spec(1, width="2.21cm", latex_valign = "m") %>%
+  column_spec(2, width="4cm", latex_valign = "m") %>%
+  column_spec(3, width="4cm", latex_valign = "m") %>%
+  column_spec(4, width=".35cm", latex_valign = "m") %>%
+  kable_styling(
+    font_size = 7.6, # Added for LONGTABLE
+    latex_options = c(#'HOLD_position', # Removed for LONGTABLE
+    #'scale_down', # Removed for LONGTABLE
+    "repeat_header",  # Added for LONGTABLE
+    'striped'), 
+    full_width = F, # Note: TRUE does not work with LONGTABLE
+    position = 'center'# Added for LONGTABLE
+  ) %>%
+  footnote(general = "ns = P > 0.05,
+           * = P $\\\\leq$ 0.05,
+           ** = P $\\\\leq$ 0.01,
+           *** = P $\\\\leq$ 0.001,
+           **** = P $\\\\leq$ 0.0001
+           ", escape = F) %>%
+  footnote(general = "Kruskal–Wallis test for continuous variables,
+           Chi-Square test for categorical variables. 
+           Bonferroni correction applied.", escape = F) 
+
+```
+
+
+```{r table 4}
+#| label: tbl-4
+#| tbl-cap: "Summary of Variables by Var"
+
+# Table 4
+summary_table(data[-1], stratify_var = "Var") %>%
+  kbl(
+      booktabs = T,
+      longtable = T, # LONGTABLE
+      escape = T,
+      align = "c") %>% 
+  column_spec(1, width="2.21cm", latex_valign = "m") %>%
+  column_spec(2, width="4cm", latex_valign = "m") %>%
+  column_spec(3, width="4cm", latex_valign = "m") %>%
+  column_spec(4, width=".35cm", latex_valign = "m") %>%
+  kable_styling(
+    font_size = 7.6, # Added for LONGTABLE
+    latex_options = c(#'HOLD_position', # Removed for LONGTABLE
+    #'scale_down', # Removed for LONGTABLE
+    "repeat_header",  # Added for LONGTABLE
+    'striped'), 
+    full_width = F, # Note: TRUE does not work with LONGTABLE
+    position = 'center'# Added for LONGTABLE
+  ) %>%
+  footnote(general = "ns = P > 0.05,
+           * = P $\\\\leq$ 0.05,
+           ** = P $\\\\leq$ 0.01,
+           *** = P $\\\\leq$ 0.001,
+           **** = P $\\\\leq$ 0.0001
+           ", escape = F) %>%
+  footnote(general = "Kruskal–Wallis test for continuous variables,
+           Chi-Square test for categorical variables. 
+           Bonferroni correction applied.", escape = F) 
+
+```
+
+
+
+
+
+```{r, echo = F, eval = F}
+# Histograms of variable distributions
+
+# Identify numeric columns
+numeric_cols <- sapply(data, is.numeric)
+
+# Create histograms for each numeric column
+for (col in names(data)[numeric_cols]) {
+  hist(data[[col]], main = paste("Histogram of", col), xlab = col)
+}
+
+```
+
+
+
+
+
+```{r corr mat, fig.cap = "Correlation Matrix", fig.width=10.5, fig.height=8}
+#| label: fig-corr
+
+# Generate psuedo correlation matrix
+psuedo_cor_matrix <- psuedo_cor_mat(data[-1])
+
+# Plot the heatmap (with variable names and values)
+ggplot(melt(psuedo_cor_matrix), aes(x = Var2, y = Var1, fill = value)) +
+  geom_tile(color = "white") +  
+  geom_text(aes(label = sprintf("%.2f", value)), size = 2.8, color = "black") +
+  scale_fill_gradient2(low = "blue",
+                       high = "red",
+                       mid = "white",
+                       midpoint = 0,
+                       limits = c(-1, 1),
+                       space = "Lab",
+                       name = "Correlation") +
+  theme_minimal() +
+  labs(x = "", y = "") +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 9),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.y = element_text(angle = 45, hjust = 1, size = 9),
+        legend.position="none") +  
+  coord_fixed(ratio = .55)
+
+```
+
+
+
+
+### Missingness
+
+We looked at the amount of missing data by variable and by sample.
+- ***TODO: insert missingness table***
+After inspecting the data, we ran Little's test for MCAR. The null hypothesis for this test is that the data are not MCAR. The p-value was over 0.05, so we cannot reject the null hypothesis. We conclude that there is evidence that these data are missing completely at random.  Missing data in covariates will be imputed during the bootstrap process to preserve the already limited sample available.
+
+```{r missingness, eval = F}
+
+# 1. Missing by Variable
+missing_by_variable <- data %>%
+  summarise(across(everything(), ~ sum(is.na(.)))) %>%
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Missing_Count") %>%
+  mutate(Missing_Percentage = round((Missing_Count / nrow(data)) * 100, 2))
+
+# Display Missing by Variable
+cat("\n### Missing Data by Variable\n\n")
+kbl(missing_by_variable, caption = "Missing Data by Variable")
+
+# 2. Missing by Record
+missing_by_record <- data %>%
+  mutate(Row = row_number()) %>%
+  mutate(Missing_Count = rowSums(is.na(across(everything())))) %>%
+  select(Row, Missing_Count)
+
+# Display Missing by Record
+cat("\n\n### Missing Data by Record\n\n")
+kbl(missing_by_record, caption = "Missing Data by Record")
+
+# Display Missing by Record
+cat("\n\n### Missing Data by Record\n\n")
+kable(missing_by_record, caption = "Missing Data by Record")
+
+# 3. Total Complete Cases
+total_complete_cases <- data %>%
+  summarise(Complete_Cases = sum(complete.cases(.))) %>%
+  pull(Complete_Cases)
+
+# Display Total Complete Cases
+cat("\n\n### Total Complete Cases\n\n")
+cat(total_complete_cases, "complete cases out of", nrow(data), "records.\n")
+```
+
+```{r missingness mechanism, eval = F}
+# Test for MCAR
+naniar::mcar_test(data)
+
+
+```
+
+
+
+
+
+### Modeling
+
+We use a Lasso model to answer both questions at issue. To evaluate baseline variables that predict `abst`, we construct a Lass model that includes all main effects and polynomial terms for score variables. To evaluate baseline moderators of the effect of `BA` on `abst`, we also use a Lasso model, but the model that we use this time includes all main effects and polynomial terms of scores, as well as interactions of those terms with `BA`. 
+
+We choose a Lasso model due to its constraints on potential values of the coefficients, introducing desirable bias to the model when performed correctly, which prevent overfitting. We choose not to use L0, L0+L2, or relaxed Lasso: while all three are computationally more difficult and would have more convergence issues than Lasso, the former two also have a harsher penalty [@hazimeh2020fast; @hastie2015statistical; @meinshausen2007relaxed].  
+
+First, we perform an 80/20 validation training split, where each split has the same proportion of positive outcomes (where `abst`=1). We proceed with the bootstrap of the training data: first, through a bootstrap re-sample of the data, then imputing missing data, and by estimating our lasso on the imputed bootstrap data as many times as necessary. Coefficients are pooled and confidence intervals are estimated. Bootstrap is used to stabilize estimates due to volatility caused by low sample size and to estimate confidence intervals for coefficients.
+
+After the estimates are derived from the bootstrap procedure, we evaluate the model's performance using the validation data. We tested the model's performance using the pooled estimates on validation data in order to assess calibration and discrimination. For the former, we use calibration plots comparing the model's abstinence predictions to the study's actual results. For the latter, we use AUC and ROC to test whether the model could correctly identify participants who were or were not abstinent.
+
+
+
+
+
+```{r}
+# prep data for analysis
+data <- data %>%
+  mutate(abst = as.numeric(abst) - 1,
+    edu = factor(recode_factor(edu,
+                               "Grade School" = "High School or Less",
+                               "Some High School" = "High School or Less",
+                               "High School Graduate/GED" = "High School or Less"),
+                 levels = c("High School or Less",
+                            "Some College/Technical School",
+                            "College Graduate"),
+                 ordered = TRUE),
+    inc = factor(recode_factor(inc,
+                               "$50,001–75,000" = "More than $50,000",
+                               "More than $75,000" = "More than $50,000"),
+                 levels = c("Less than $20,000",
+                            "$20,000–35,000",
+                            "$35,001–50,000",
+                            "More than $50,000"),
+                 ordered = TRUE)
+         )
+
+data <- data %>%
+  mutate(logNMR = log(NMR)) %>%
+  select(-c(NMR, Hisp, NHW))
+
+```
+
+
+
+
+
+```{r}
+# --- Validation / Train split ---
+
+set.seed(123)
+split_indices <- createDataPartition(y = data$abst, p = 0.8, list = FALSE)
+
+# split data training / validation sets
+train_data <- data[split_indices, ]
+validation_data <- data[-split_indices, ]
+data <- train_data
+```
+
+
+# Results
+
+## Baseline Variables Predict Abstinence
+
+Results are presented for bootstrapped lasso regression on outcome abstinence, including main effects of baseline covariates and controlling for other treatments.
+
+```{r}
+#GOOD; Q1; baseline
+
+# Def All Params
+B <- 50      # num of bootstraps
+m <- 5      # num of multiple imputations per bootstrap
+k <- 5      # num of cv folds for cv.glmnet
+poly_degree <- 3  # degree for polynomial terms
+
+# remove id 
+data_complete <- data %>% select(-id) 
+
+# Flag predictor vars
+# exclude 'abst' from predictors
+predictor_vars <- setdiff(names(data_complete), c("abst")) 
+
+# Flag trt vars
+treatment_vars <- c("BA", "Var")
+baseline_vars <- setdiff(predictor_vars, treatment_vars)
+
+# Flag numeric and int baseline vars
+num_baseline_vars <- baseline_vars[sapply(data_complete[baseline_vars],
+                                          function(x) is.numeric(x) & !is.integer(x))]
+
+non_binary_factor_vars <- baseline_vars[sapply(data_complete[baseline_vars],
+                                               function(x) is.integer(x))]
+# Flag Binary baseline vars
+binary_vars <- baseline_vars[sapply(data_complete[baseline_vars],
+                                  function(x) length(unique(na.omit(x))) == 2)]
+
+# Flag factor vars and store levels
+factor_vars <- names(data_complete)[sapply(data_complete, is.factor)]
+levels_list <- lapply(data_complete[, factor_vars, drop = FALSE], levels)
+
+# --- Build Formula ---
+# Main Effects 
+main_effects <- paste("BA + Var +", 
+                      paste(c(
+                        paste0("poly(", non_binary_factor_vars,
+                               ", ", poly_degree, ", raw=TRUE)"),
+                        num_baseline_vars,  
+                        binary_vars  
+                      ), collapse = " + "))
+
+
+
+# Full Model Formula
+full_formula <- as.formula(paste("abst ~", main_effects))
+
+# fix factor levels in the entire dataset (ensure consistency) BUGFIX
+if (length(factor_vars) > 0) {
+  for (var in factor_vars) {
+    data_complete[[var]] <- factor(data_complete[[var]], levels = levels_list[[var]])
+  }
+}
+
+# Gen master model matrix 
+master_model_matrix <- model.matrix(full_formula, data = data_complete)
+master_coef_names <- colnames(master_model_matrix)
+total_coeffs <- length(master_coef_names)
+
+# init storage for coefs
+coef_matrix <- matrix(NA, nrow = B, ncol = total_coeffs)
+colnames(coef_matrix) <- master_coef_names
+
+# init object for nonzero coef indicator
+nonzero_matrix <- matrix(0, nrow = B, ncol = total_coeffs)
+colnames(nonzero_matrix) <- master_coef_names
+
+
+```
+
+```{r, eval = F}
+# --- Bootstrap Loop ---
+set.seed(1) 
+
+for (b in 1:B) {
+  # Print progress
+  cat("Bootstrap iteration:", b, "of", B, "\n")
+  
+  # Stratified resampling with replacement (maintain class distribution in 'abst')
+  bootstrap_sample <- data_complete %>%
+    group_by(abst) %>%
+    sample_frac(size = 1, replace = TRUE) %>%
+    ungroup()
+  
+  # impute data 
+  predictor_matrix <- make.predictorMatrix(bootstrap_sample)
+  predictor_matrix[, "abst"] <- 0  # dont use 'abst' to predict others
+  predictor_matrix["abst", ] <- 0  # dont impute 'abst' (not necessary bc no missing?)
+  imp <- mice(bootstrap_sample, m = m, printFlag = FALSE, seed = b,
+              predictorMatrix = predictor_matrix, method = 'pmm')
+  
+  # Stack imputations into one dataset 
+  stacked_data <- complete(imp, action = "long", include = FALSE)
+  stacked_data <- stacked_data %>% dplyr::select(-.id, -.imp) # remove '.id' / '.imp'
+  
+  # fix factor levels in the entire dataset (ensure consistency) BUGFIX
+  if (length(factor_vars) > 0) {
+    for (var in factor_vars) {
+      stacked_data[[var]] <- factor(stacked_data[[var]], levels = levels_list[[var]])
+    }
+  }
+  
+  # boot model matrix and X / y
+  model_data_full <- model.matrix(full_formula, data = stacked_data)
+  x <- model_data_full[, -1] # remove intercept for glmnet
+  y_impute <- stacked_data$abst # response var for glmnet
+  
+  # Remove predictors with zero variance BUGFIX
+  zero_var_cols <- apply(x, 2, function(x) var(x) == 0)
+  if (any(zero_var_cols)) {
+    x <- x[, !zero_var_cols]
+    current_coef_names <- colnames(x)
+  } else {
+    current_coef_names <- colnames(x)}
+  
+  # align columns w/ master_coef_names excluding intercept BUGFIX
+  master_coef_names_no_intercept <- master_coef_names[-1]  # now exclude intercept
+  missing_cols <- setdiff(master_coef_names_no_intercept, current_coef_names)
+  if (length(missing_cols) > 0) {
+    zeros_matrix <- matrix(0, nrow = nrow(x), ncol = length(missing_cols))
+    colnames(zeros_matrix) <- missing_cols
+    x <- cbind(x, zeros_matrix)
+  }
+  
+  # rm extra columns not in master_coef_names_no_intercept BUGFIX
+  extra_cols <- setdiff(current_coef_names, master_coef_names_no_intercept)
+  if (length(extra_cols) > 0) {
+    x <- x[, !(colnames(x) %in% extra_cols)]
+  }
+  
+  # reorder x colums to match master_coef_names_no_intercept BUGFIX
+  x <- x[, master_coef_names_no_intercept]
+  
+
+  
+  # Run cv.glmnet
+  cv_lasso <- tryCatch({
+    cv.glmnet(
+      x = x,
+      y = y_impute,
+      family = "binomial",
+      alpha = 1,
+      standardize = TRUE,
+      relax = FALSE
+    )
+  }, error = function(e) {
+    cat("Error in cv.glmnet for bootstrap", b, ":", e$message, "\n")
+    return(NULL)
+  })
+  
+  if (is.null(cv_lasso)) {
+    next  # skip/move to next bootstrap iteration
+  }
+  
+  # Fit lasso 
+  lasso_fit <- glmnet(
+    x = x,
+    y = y_impute,
+    family = "binomial",
+    alpha = 1,
+    lambda = cv_lasso$lambda.min,
+    standardize = TRUE,
+    relax = FALSE
+  )
+
+  
+  # grab coefs including intercept
+  coef_values <- as.vector(coef(lasso_fit))
+  coef_names <- rownames(coef(lasso_fit))
+  names(coef_values) <- coef_names
+  
+  # init object to store coefs names
+  aligned_coef_values <- setNames(rep(0, length(master_coef_names)), master_coef_names)
+  
+  # match coefs to the aligned vector
+  matched <- names(coef_values) %in% master_coef_names
+  aligned_coef_values[names(coef_values)[matched]] <- coef_values[matched]
+  
+  # store coefs
+  coef_matrix[b, ] <- aligned_coef_values
+  
+  # store nonzero indicators
+  nonzero_matrix[b, ] <- ifelse(aligned_coef_values != 0, 1, 0)
+}
+
+
+
+```
+
+```{r, eval = F}
+saveRDS(coef_matrix, file = "baseline_coef.rds")
+saveRDS(nonzero_matrix, file = "baseline_nonzero.rds")
+
+```
+
+```{r, eval = T}
+coef_matrix <- readRDS(file = "baseline_coef.rds")
+nonzero_matrix <- readRDS(file = "baseline_nonzero.rds")
+
+```
+
+```{r}
+
+# --- Pool coefs ---
+
+# identify bad runs
+bad_runs <- apply(coef_matrix, 1, function(x) all(is.na(x)) | all(x == 0)) &
+            apply(nonzero_matrix, 1, function(x) all(is.na(x)) | all(x == 0))
+
+# rm bad runs from objects
+coef_matrix <- coef_matrix[!bad_runs, ]
+nonzero_matrix <- nonzero_matrix[!bad_runs, ]
+
+# make coef data frame
+coef_mean <- colMeans(coef_matrix, na.rm = TRUE)
+coef_median <- apply(coef_matrix, 2, median, na.rm = TRUE)
+coef_lower <- apply(coef_matrix, 2, quantile, probs = 0.025, na.rm = TRUE)
+coef_upper <- apply(coef_matrix, 2, quantile, probs = 0.975, na.rm = TRUE)
+proportion_nonzero <- colSums(nonzero_matrix, na.rm = TRUE) / sum(nonzero_matrix[,1])
+
+coef_ci <- data.frame(
+  Predictor = colnames(coef_matrix),
+  Mean = coef_mean,
+  Median = coef_median,
+  Lower_2.5 = coef_lower,
+  Upper_97.5 = coef_upper,
+  Proportion_Nonzero = proportion_nonzero
+)
+
+
+
+
+```
+
+```{r, eval = F}
+# plot the CIs
+ggplot(coef_ci, aes(x = Predictor, y = Median)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = Lower_2.5, ymax = Upper_97.5), width = 0.2) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(
+    title = "Bootstrap Confidence Intervals for Lasso Coefficients",
+    y = "Coefficient Estimate",
+    x = "Predictors"
+  )
+
+# plot nonzero prop 
+ggplot(coef_ci, aes(x = Predictor, y = Proportion_Nonzero)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  theme_bw() +
+  labs(
+    title = "Proportion of Bootstrap Samples with Non-Zero Coefficients",
+    y = "Proportion",
+    x = "Predictors"
+  )
+
+
+
+
+```
+
+
+```{r}
+# --- Enforce Sparsity ---
+
+# Note: this is essentially skipped in this regression run because only having
+# main effects in the model allows for few enough parameters that we are not overfitting.
+
+coef_matrix_sparse <- coef_matrix
+
+
+coef_mean <- colMeans(coef_matrix_sparse, na.rm = TRUE)
+coef_median <- apply(coef_matrix_sparse, 2, median, na.rm = TRUE)
+coef_lower <- apply(coef_matrix_sparse, 2, quantile, probs = 0.025, na.rm = TRUE)
+coef_upper <- apply(coef_matrix_sparse, 2, quantile, probs = 0.975, na.rm = TRUE)
+proportion_nonzero <- colSums(nonzero_matrix, na.rm = TRUE) / sum(nonzero_matrix[,1])
+
+coef_ci_sparse <- data.frame(
+  Predictor = colnames(coef_matrix_sparse),
+  Mean = coef_mean,
+  Median = coef_median,
+  Lower_2.5 = coef_lower,
+  Upper_97.5 = coef_upper,
+  Proportion_Nonzero = proportion_nonzero
+)
+```
+
+
+There are four significant baseline predictors of abstinence: `ftcd_score`, `Var`, `hedonsum_y_pq1`, and `logNMR`. That these are predictors of abstinence is not surprising. Although the relationship is not linear, `ftcd_score` is a measure of dependence, and thus would ***TODO***
+varenicline (`Var`) is known to be 
+
+
+
+
+
+```{r}
+
+# Results Table
+
+coef_ci_sparse <- coef_ci_sparse %>%
+  mutate(
+    Odds_Ratio = exp(Median)  # Odds Ratio
+  )
+
+coef_ci_sparse <- coef_ci_sparse %>%
+  mutate(
+    Rounded_Lower_2.5 = round(Lower_2.5, 4),
+    Rounded_Upper_97.5 = round(Upper_97.5, 4),
+    
+    # Determine significance
+    Significant = ifelse(
+      Rounded_Lower_2.5 > 0 | Rounded_Upper_97.5 < 0,
+      "Yes",
+      "No"
+    )
+  ) %>%
+  select(-Rounded_Lower_2.5, -Rounded_Upper_97.5)
+
+table_data <- coef_ci_sparse %>%
+  select(
+    Predictor,
+    Median,
+    Odds_Ratio,
+    Lower_2.5,
+    Upper_97.5,
+    Proportion_Nonzero,
+    Significant
+  ) %>%
+  rename(
+    "Estimate (Median)" = Median,
+    "Odds Ratio" = Odds_Ratio,
+    "Lower 2.5%" = Lower_2.5,
+    "Upper 97.5%" = Upper_97.5,
+    "Proportion Non-Zero" = Proportion_Nonzero
+  )
+
+table_data %>%
+  kbl(row.names = F,
+    booktabs = TRUE,
+    longtable = TRUE,        
+    escape = TRUE,
+    align = "c",              
+    digits = 3,               
+    caption = "Lasso Regression Coefficient Estimates"  
+  ) %>%
+  column_spec(1, width = "2.21cm", latex_valign = "m") %>%  
+  column_spec(2, width = "2cm", latex_valign = "m") %>%   
+  column_spec(3, width = "2cm", latex_valign = "m") %>%   
+  column_spec(4, width = "2cm", latex_valign = "m") %>%   
+  column_spec(5, width = "2cm", latex_valign = "m") %>%   
+  column_spec(6, width = "2cm", latex_valign = "m") %>%    
+  column_spec(7, width = ".5cm", latex_valign = "m") %>%   
+  kable_styling(
+    font_size = 7.6,                                     
+    latex_options = c("repeat_header", "striped"),      
+    full_width = FALSE,
+    position = "center"                                  
+  )
+
+```
+
+
+
+The polynomial variables are difficult to interpret in the same efficient manner as the continuous `logNMR` or binary `Var`, therefore we produce plots to enhance our understanding.
+
+
+```{r, fig.cap="Relationship between FTCD Score and Estimates"}
+
+# FTCD
+
+ftcd_coefs <- coef_ci[grep("poly\\(ftcd_score, 3, raw = TRUE\\)", coef_ci$Predictor), ]
+
+
+ftcd_range <- seq(min(na.omit(data$ftcd_score)),
+                  max(na.omit(data$ftcd_score)), length.out = 100)
+
+# calc predicted log odds
+predicted_log_odds <- coef_ci$Median[coef_ci$Predictor == "(Intercept)"] +  
+                     ftcd_coefs$Median[1] * ftcd_range +  
+                     ftcd_coefs$Median[2] * ftcd_range^2 +     
+                     ftcd_coefs$Median[3] * ftcd_range^3        
+
+# convert to probabilities
+predicted_probs <- 1/(1 + exp(-predicted_log_odds))
+
+plot_data <- data.frame(
+  ftcd_score = ftcd_range,
+  log_odds = predicted_log_odds,
+  probability = predicted_probs
+)
+
+
+
+# plot log odds
+p1 <- ggplot(plot_data, aes(x = ftcd_score, y = log_odds)) +
+  geom_line() +
+  theme_minimal() +
+  labs(x = "FTCD Score", 
+       y = "Predicted Log Odds",
+       title = "")
+
+# plot probabilities
+p2 <- ggplot(plot_data, aes(x = ftcd_score, y = probability)) +
+  geom_line() +
+  theme_minimal() +
+  labs(x = "FTCD Score", 
+       y = "Predicted Probability",
+       title = "")
+
+
+ftcd_plot <- ggarrange(
+  p1,
+  p2, 
+  ncol = 2,
+  nrow = 1
+)
+
+print(ftcd_plot)
+
+```
+
+
+
+```{r, fig.cap="Relationship between Hedonsum Score and Estimates"}
+# Hedonsum
+hedon_coefs <- coef_ci[grep("poly\\(hedonsum_y_pq1, 3, raw = TRUE\\)", coef_ci$Predictor), ]
+hedon_range <- seq(min(na.omit(data$hedonsum_y_pq1)),
+                   max(na.omit(data$hedonsum_y_pq1)), length.out = 100)
+
+# calc predicted log odds
+predicted_log_odds <- coef_ci$Median[coef_ci$Predictor == "(Intercept)"] +  
+                     hedon_coefs$Median[1] * hedon_range +     
+                     hedon_coefs$Median[2] * hedon_range^2 +      
+                     hedon_coefs$Median[3] * hedon_range^3               
+
+# convert to probabilities
+predicted_probs <- 1/(1 + exp(-predicted_log_odds))
+
+plot_data <- data.frame(
+  hedonsum_score = hedon_range,
+  log_odds = predicted_log_odds,
+  probability = predicted_probs
+)
+
+# plot log odds
+p1 <- ggplot(plot_data, aes(x = hedonsum_score, y = log_odds)) +
+  geom_line() +
+  theme_minimal() +
+  labs(x = "Hedonsum Score", 
+       y = "Predicted Log Odds",
+       title = "")
+
+# plot probabilities
+p2 <- ggplot(plot_data, aes(x = hedonsum_score, y = probability)) +
+  geom_line() +
+  theme_minimal() +
+  labs(x = "Hedonsum Score", 
+       y = "Predicted Probability",
+       title = "")
+
+hedon_plot <- ggarrange(
+  p1,
+  p2, 
+  ncol = 2,
+  nrow = 1
+)
+print(hedon_plot)
+```
+
+
+
+
+
+
+
+
+
+
+
+### Diagnostics
+
+```{r}
+
+# --- Generate Predictions ---
+
+# fix factor levels in the entire dataset (ensure consistency) BUGFIX
+if (length(factor_vars) > 0) {
+  for (var in factor_vars) {
+    validation_data[[var]] <- factor(validation_data[[var]], levels = levels_list[[var]])
+  }
+}
+
+# compute ROC for valid data
+
+# prepare valid data
+model_data_valid_full <- model.matrix(full_formula, data = validation_data)
+current_coef_names_valid <- colnames(model_data_valid_full) # align cols
+missing_cols <- setdiff(master_coef_names, current_coef_names_valid)
+if (length(missing_cols) > 0) {
+  zeros_matrix <- matrix(0,
+                         nrow = nrow(model_data_valid_full),
+                         ncol = length(missing_cols))
+  colnames(zeros_matrix) <- missing_cols
+  model_data_valid_full <- cbind(model_data_valid_full, zeros_matrix)
+}
+extra_cols <- setdiff(current_coef_names_valid, master_coef_names)
+if (length(extra_cols) > 0) {
+  model_data_valid_full <-
+    model_data_valid_full[, !(colnames(model_data_valid_full) %in% extra_cols)]
+}
+
+model_data_valid_full <- model_data_valid_full[, master_coef_names] # reorder
+predictor_coefs <- coef_ci_sparse$Median
+names(predictor_coefs) <- coef_ci_sparse$Predictor
+predictor_coefs <- predictor_coefs[master_coef_names] # ensure match
+
+# predictions for valid data
+linear_predictor <- as.vector(model_data_valid_full %*% predictor_coefs)
+pred_prob <- 1 / (1 + exp(-linear_predictor))
+
+# BUGFIX
+if (length(validation_data) < length(pred_prob)) { 
+  validation_data <- validation_data[complete.cases(validation_data),]
+}
+
+validation_data$pred_prob <- pred_prob
+
+
+
+# compute ROC for training data
+
+# prepare training data
+data_complete_cc <- data_complete[complete.cases(data_complete),]
+model_data_train <- model.matrix(full_formula, data = data_complete_cc)
+current_coef_names_train <- colnames(model_data_train)
+missing_cols_train <- setdiff(master_coef_names, current_coef_names_train)
+if (length(missing_cols_train) > 0) {
+  zeros_matrix_train <- matrix(0, nrow = nrow(model_data_train),
+                               ncol = length(missing_cols_train))
+  colnames(zeros_matrix_train) <- missing_cols_train
+  model_data_train <- cbind(model_data_train, zeros_matrix_train)
+}
+extra_cols_train <- setdiff(current_coef_names_train, master_coef_names)
+if (length(extra_cols_train) > 0) {
+  model_data_train <-
+    model_data_train[, !(colnames(model_data_train) %in% extra_cols_train)]
+}
+model_data_train <- model_data_train[, master_coef_names]
+
+# predictions for training data
+linear_predictor_train <- as.vector(model_data_train %*% predictor_coefs)
+pred_prob_train <- 1 / (1 + exp(-linear_predictor_train))
+data_complete_cc$pred_prob <- pred_prob_train
+
+
+# ROCs
+roc_valid <- roc(validation_data$abst, validation_data$pred_prob)
+roc_train <- roc(data_complete_cc$abst, data_complete_cc$pred_prob)
+
+# plot ROC curves
+plot(roc_train, col = "red", main = "Lasso ROC")
+plot(roc_valid, add = TRUE, col = "blue")
+legend("bottomright",
+       legend = c(paste("Validation, AUC=", round(roc_valid$auc, 4)),
+                  paste("Training, AUC=", round(roc_train$auc, 4))),
+       fill = c("blue", "red"))
+
+```
+
+
+```{r q1resid, eval = F}
+# calc residuals
+data_complete_cc$residuals <- data_complete_cc$abst - data_complete_cc$pred_prob
+
+# plot residuals v. fitted
+ggplot(data_complete_cc, aes(x = pred_prob, y = residuals)) +
+  geom_point() +
+  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
+  labs(x = "Predicted Probability", y = "Residuals") +
+  ggtitle("Residuals vs. Predicted Probabilities")
+
+# Histogram of Residuals
+hist(data_complete_cc$residuals, main = "Histogram of Residuals")
+
+# Q-Q Plot of Residuals
+qqnorm(data_complete_cc$residuals)
+qqline(data_complete_cc$residuals)
+```
+
+
+```{r}
+# calibration plot
+num_cuts <- 100
+
+# Training Set
+calib_data_train <- data.frame(
+  prob = data_complete_cc$pred_prob,
+  bin = cut(data_complete_cc$pred_prob, breaks = num_cuts),
+  class = as.numeric(as.character(data_complete_cc$abst))
+)
+
+calib_data_train <- calib_data_train %>% 
+  group_by(bin) %>% 
+  summarise(
+    observed = sum(class) / n(), 
+    expected = mean(prob), 
+    se = sqrt(observed * (1 - observed) / n())
+  )
+
+
+calib_plot_train <- ggplot(calib_data_train) +
+  geom_line(aes(x = expected, y = expected, color = "Ideal")) +
+  geom_smooth(aes(x = expected, y = observed, color = "Loess Fit"), method = "loess") +
+  labs(
+    x = "Expected Proportion", 
+    y = "Observed Proportion", 
+    title = "Calibration: Training Data", 
+    color = "Legend"
+  ) +
+  theme_minimal() +
+  scale_color_manual(values = c("Ideal" = "red", "Loess Fit" = "blue"))
+
+# Validation Set
+calib_data_valid <- data.frame(
+  prob = validation_data$pred_prob,
+  bin = cut(validation_data$pred_prob, breaks = num_cuts),
+  class = as.numeric(as.character(validation_data$abst))
+)
+
+
+calib_data_valid <- calib_data_valid %>% 
+  group_by(bin) %>% 
+  summarise(
+    observed = sum(class) / n(), 
+    expected = mean(prob), 
+    se = sqrt(observed * (1 - observed) / n())
+  )
+
+calib_plot_valid <- ggplot(calib_data_valid) + 
+  geom_line(aes(x = expected, y = expected, color = "Ideal")) + 
+  geom_smooth(aes(x = expected, y = observed, color = "Loess Fit"), method = "loess") +
+  labs(
+    x = "Expected Proportion", 
+    y = "Observed Proportion",
+    title = "Calibration: Validation Data", 
+    color = "Legend"
+  ) +
+  theme_minimal() +
+  scale_color_manual(values = c("Ideal" = "red", "Loess Fit" = "blue"))
+
+calib_plot_combined <- ggarrange(
+  calib_plot_train,
+  calib_plot_valid, 
+  ncol = 2,
+  nrow = 1,
+  common.legend = TRUE,
+  legend = "bottom"
+)
+
+print(calib_plot_combined)
+```
+
+
+```{r, fig.cap="Lasso Calibration Plot on Validation Data"}
+
+# calibration plot
+num_cuts <- 100
+
+# calibration for validation data
+test_calib <- data.frame(
+  prob = validation_data$pred_prob,
+  bin = cut(validation_data$pred_prob, breaks = num_cuts),
+  class = as.numeric(as.character(validation_data$abst))
+)
+
+test_calib <- test_calib %>% 
+  group_by(bin) %>% 
+  summarize(observed = sum(class)/n(), 
+            expected = sum(prob)/n(), 
+            se = sqrt(observed * (1-observed) / n()))
+
+cols <- c("Ideal"="red","loess_smooth"="black","lm_smooth"="blue")
+ggplot(test_calib) + 
+  geom_abline(aes(intercept = 0, slope = 1, color="Ideal")) + 
+  geom_smooth(aes(x = expected,
+                  y = observed,
+                  color="loess_smooth"), se=TRUE) +
+  geom_smooth(aes(x = expected,
+                  y = observed,
+                  color="lm_smooth"), se=FALSE, method="lm") +
+  scale_color_manual(values=cols) +
+  labs(x = "Expected Proportion",
+       y = "Observed Proportion",
+       title="") +
+  theme_minimal()
+```
+
+
+
+
+
+
+
+
+
+## Baseline Variables as Moderators of BA
+
+Results are presented for bootstrapped lasso regression on the outcome abstinence, with main effects included and unpenalized. Interactions of baseline covariates with `BA` are included and unpenalized, allowing the Lasso to select the interaction terms of consequence.  
+
+```{r}
+#GOOD; Q2; Moderator
+
+# Def All Params
+B <- 50      # num of bootstraps
+m <- 5      # num of multiple imputations per bootstrap
+k <- 5      # num of cv folds for cv.glmnet
+poly_degree <- 3  # degree for polynomial terms
+
+# remove id 
+data_complete <- data %>% select(-id) 
+
+# Flag predictor vars
+# exclude 'abst' from predictors
+predictor_vars <- setdiff(names(data_complete), c("abst")) 
+
+# Flag trt vars
+treatment_vars <- c("BA", "Var")
+baseline_vars <- setdiff(predictor_vars, treatment_vars)
+
+# Flag numeric and int baseline vars
+num_baseline_vars <- baseline_vars[sapply(data_complete[baseline_vars],
+                                          function(x) is.numeric(x) & !is.integer(x))]
+
+non_binary_factor_vars <- baseline_vars[sapply(data_complete[baseline_vars],
+                                               function(x) is.integer(x))]
+# Flag Binary baseline vars
+binary_vars <- baseline_vars[sapply(data_complete[baseline_vars],
+                                  function(x) length(unique(na.omit(x))) == 2)]
+
+# Flag factor vars and store levels
+factor_vars <- names(data_complete)[sapply(data_complete, is.factor)]
+levels_list <- lapply(data_complete[, factor_vars, drop = FALSE], levels)
+
+# --- Build Formula ---
+# Main Effects 
+main_effects <- paste("BA + Var +", 
+                      paste(c(
+                        paste0("poly(", non_binary_factor_vars,
+                               ", ", poly_degree, ", raw=TRUE)"),
+                        num_baseline_vars,  
+                        binary_vars  
+                      ), collapse = " + "))
+
+# Interaction Terms
+interaction_terms <- paste(c(
+  paste0("BA:", c(paste0("poly(", non_binary_factor_vars,
+                         ", ", poly_degree, ", raw=TRUE)"), num_baseline_vars, binary_vars))
+), collapse = " + ")
+
+# Full Model Formula
+full_formula <- as.formula(paste("abst ~", main_effects, "+", interaction_terms))
+
+# fix factor levels in the entire dataset (ensure consistency) BUGFIX
+if (length(factor_vars) > 0) {
+  for (var in factor_vars) {
+    data_complete[[var]] <- factor(data_complete[[var]], levels = levels_list[[var]])
+  }
+}
+
+# Gen master model matrix 
+master_model_matrix <- model.matrix(full_formula, data = data_complete)
+master_coef_names <- colnames(master_model_matrix)
+total_coeffs <- length(master_coef_names)
+
+# init storage for coefs
+coef_matrix <- matrix(NA, nrow = B, ncol = total_coeffs)
+colnames(coef_matrix) <- master_coef_names
+
+# init object for nonzero coef indicator
+nonzero_matrix <- matrix(0, nrow = B, ncol = total_coeffs)
+colnames(nonzero_matrix) <- master_coef_names
+```
+
+```{r, eval = F}
+# --- Bootstrap Loop ---
+set.seed(1) 
+
+for (b in 1:B) {
+  # Print progress
+  cat("Bootstrap iteration:", b, "of", B, "\n")
+  
+  # Stratified resampling with replacement (maintain class distribution in 'abst')
+  bootstrap_sample <- data_complete %>%
+    group_by(abst) %>%
+    sample_frac(size = 1, replace = TRUE) %>%
+    ungroup()
+  
+  # impute data 
+  predictor_matrix <- make.predictorMatrix(bootstrap_sample)
+  predictor_matrix[, "abst"] <- 0  # dont use 'abst' to predict others
+  predictor_matrix["abst", ] <- 0  # dont impute 'abst' (not necessary bc no missing?)
+  imp <- mice(bootstrap_sample, m = m, printFlag = FALSE, seed = b,
+              predictorMatrix = predictor_matrix, method = 'pmm')
+  
+  # Stack imputations into one dataset 
+  stacked_data <- complete(imp, action = "long", include = FALSE)
+  stacked_data <- stacked_data %>% dplyr::select(-.id, -.imp) # remove '.id' / '.imp'
+  
+  # fix factor levels in the entire dataset (ensure consistency) BUGFIX
+  if (length(factor_vars) > 0) {
+    for (var in factor_vars) {
+      stacked_data[[var]] <- factor(stacked_data[[var]], levels = levels_list[[var]])
+    }
+  }
+  
+  # boot model matrix and X / y
+  model_data_full <- model.matrix(full_formula, data = stacked_data)
+  x <- model_data_full[, -1] # remove intercept for glmnet
+  y_impute <- stacked_data$abst # response var for glmnet
+  
+  # Remove predictors with zero variance BUGFIX
+  zero_var_cols <- apply(x, 2, function(x) var(x) == 0)
+  if (any(zero_var_cols)) {
+    x <- x[, !zero_var_cols]
+    current_coef_names <- colnames(x)
+  } else {
+    current_coef_names <- colnames(x)}
+  
+  # align columns w/ master_coef_names excluding intercept BUGFIX
+  master_coef_names_no_intercept <- master_coef_names[-1]  # now exclude intercept
+  missing_cols <- setdiff(master_coef_names_no_intercept, current_coef_names)
+  if (length(missing_cols) > 0) {
+    zeros_matrix <- matrix(0, nrow = nrow(x), ncol = length(missing_cols))
+    colnames(zeros_matrix) <- missing_cols
+    x <- cbind(x, zeros_matrix)
+  }
+  
+  # rm extra columns not in master_coef_names_no_intercept BUGFIX
+  extra_cols <- setdiff(current_coef_names, master_coef_names_no_intercept)
+  if (length(extra_cols) > 0) {
+    x <- x[, !(colnames(x) %in% extra_cols)]
+  }
+  
+  # reorder x colums to match master_coef_names_no_intercept BUGFIX
+  x <- x[, master_coef_names_no_intercept]
+  
+  # penalty factors
+  penalty_factors <- ifelse(grepl(":", master_coef_names_no_intercept), 1, 0)
+  
+  # verify dims BUGFIX
+  if (ncol(x) != length(penalty_factors)) {
+    stop("Mismatch between x columns and penalty_factors length")
+  }
+  
+  # Run cv.glmnet
+  cv_lasso <- tryCatch({
+    cv.glmnet(
+      x = x,
+      y = y_impute,
+      family = "binomial",
+      alpha = 1,
+      penalty.factor = penalty_factors,
+      standardize = TRUE,
+      relax = FALSE
+    )
+  }, error = function(e) {
+    cat("Error in cv.glmnet for bootstrap", b, ":", e$message, "\n")
+    return(NULL)
+  })
+  
+  if (is.null(cv_lasso)) {
+    next  # skip/move to next bootstrap iteration
+  }
+  
+  # Fit lasso 
+  lasso_fit <- glmnet(
+    x = x,
+    y = y_impute,
+    family = "binomial",
+    alpha = 1,
+    lambda = cv_lasso$lambda.min,
+    penalty.factor = penalty_factors,
+    standardize = TRUE,
+    relax = FALSE
+  )
+
+  
+  # grab coefs including intercept
+  coef_values <- as.vector(coef(lasso_fit))
+  coef_names <- rownames(coef(lasso_fit))
+  names(coef_values) <- coef_names
+  
+  # init object to store coefs names
+  aligned_coef_values <- setNames(rep(0, length(master_coef_names)), master_coef_names)
+  
+  # match coefs to the aligned vector
+  matched <- names(coef_values) %in% master_coef_names
+  aligned_coef_values[names(coef_values)[matched]] <- coef_values[matched]
+  
+  # store coefs
+  coef_matrix[b, ] <- aligned_coef_values
+  
+  # store nonzero indicators
+  nonzero_matrix[b, ] <- ifelse(aligned_coef_values != 0, 1, 0)
+}
+
+
+
+```
+
+```{r, eval = F}
+saveRDS(coef_matrix, file = "moderators_coef.rds")
+saveRDS(nonzero_matrix, file = "moderators_nonzero.rds")
+
+```
+
+```{r, eval = T}
+coef_matrix <- readRDS(file = "moderators_coef.rds")
+nonzero_matrix <- readRDS(file = "moderators_nonzero.rds")
+
+```
+
+```{r}
+
+# --- Pool coefs ---
+
+# identify bad runs
+bad_runs <- apply(coef_matrix, 1, function(x) all(is.na(x)) | all(x == 0)) &
+            apply(nonzero_matrix, 1, function(x) all(is.na(x)) | all(x == 0))
+
+# rm bad runs from objects
+coef_matrix <- coef_matrix[!bad_runs, ]
+nonzero_matrix <- nonzero_matrix[!bad_runs, ]
+
+# make coef data frame
+coef_mean <- colMeans(coef_matrix, na.rm = TRUE)
+coef_median <- apply(coef_matrix, 2, median, na.rm = TRUE)
+coef_lower <- apply(coef_matrix, 2, quantile, probs = 0.025, na.rm = TRUE)
+coef_upper <- apply(coef_matrix, 2, quantile, probs = 0.975, na.rm = TRUE)
+proportion_nonzero <- colSums(nonzero_matrix, na.rm = TRUE) / sum(nonzero_matrix[,1])
+
+coef_ci <- data.frame(
+  Predictor = colnames(coef_matrix),
+  Mean = coef_mean,
+  Median = coef_median,
+  Lower_2.5 = coef_lower,
+  Upper_97.5 = coef_upper,
+  Proportion_Nonzero = proportion_nonzero
+)
+
+
+
+
+
+# plot the CIs
+ggplot(coef_ci, aes(x = Predictor, y = Median)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = Lower_2.5, ymax = Upper_97.5), width = 0.2) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(
+    title = "Bootstrap Confidence Intervals for Lasso Coefficients",
+    y = "Coefficient Estimate",
+    x = "Predictors"
+  )
+
+# plot nonzero prop 
+ggplot(coef_ci, aes(x = Predictor, y = Proportion_Nonzero)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  theme_bw() +
+  labs(
+    title = "Proportion of Bootstrap Samples with Non-Zero Coefficients",
+    y = "Proportion",
+    x = "Predictors"
+  )
+
+
+
+
+```
+
+
+
+
+
+
+```{r}
+# --- Enforce Sparsity ---
+
+# first criteria
+threshold <- .90 # make this dynamic later
+predictors_to_keep <- names(proportion_nonzero)[proportion_nonzero >= threshold]
+coef_matrix_sparse <- coef_matrix
+
+# columns (predictors) to zero out
+predictors_to_zero <- setdiff(colnames(coef_matrix_sparse), predictors_to_keep)
+
+# second criteria
+zero_ci_predictors <- coef_ci$Predictor[
+  round(coef_ci$Median, 4) == 0 &
+  round(coef_ci$Lower_2.5, 4) == 0 &
+  round(coef_ci$Upper_97.5, 4) == 0]
+
+predictors_to_zero <- union(predictors_to_zero, zero_ci_predictors)
+
+# zero out the coefs 
+if(length(predictors_to_zero) > 0){
+  coef_matrix_sparse[, predictors_to_zero] <- 0
+}
+
+coef_mean <- colMeans(coef_matrix_sparse, na.rm = TRUE)
+coef_median <- apply(coef_matrix_sparse, 2, median, na.rm = TRUE)
+coef_lower <- apply(coef_matrix_sparse, 2, quantile, probs = 0.025, na.rm = TRUE)
+coef_upper <- apply(coef_matrix_sparse, 2, quantile, probs = 0.975, na.rm = TRUE)
+proportion_nonzero <- colSums(nonzero_matrix, na.rm = TRUE) / sum(nonzero_matrix[,1])
+
+coef_ci_sparse <- data.frame(
+  Predictor = colnames(coef_matrix_sparse),
+  Mean = coef_mean,
+  Median = coef_median,
+  Lower_2.5 = coef_lower,
+  Upper_97.5 = coef_upper,
+  Proportion_Nonzero = proportion_nonzero
+)
+```
+
+
+
+
+
+
+```{r}
+
+# --- Generate Predictions ---
+
+# fix factor levels in the entire dataset (ensure consistency) BUGFIX
+if (length(factor_vars) > 0) {
+  for (var in factor_vars) {
+    validation_data[[var]] <- factor(validation_data[[var]], levels = levels_list[[var]])
+  }
+}
+
+# compute ROC for valid data
+
+# prepare valid data
+model_data_valid_full <- model.matrix(full_formula, data = validation_data)
+current_coef_names_valid <- colnames(model_data_valid_full) # align cols
+missing_cols <- setdiff(master_coef_names, current_coef_names_valid)
+if (length(missing_cols) > 0) {
+  zeros_matrix <- matrix(0,
+                         nrow = nrow(model_data_valid_full),
+                         ncol = length(missing_cols))
+  colnames(zeros_matrix) <- missing_cols
+  model_data_valid_full <- cbind(model_data_valid_full, zeros_matrix)
+}
+extra_cols <- setdiff(current_coef_names_valid, master_coef_names)
+if (length(extra_cols) > 0) {
+  model_data_valid_full <-
+    model_data_valid_full[, !(colnames(model_data_valid_full) %in% extra_cols)]
+}
+
+model_data_valid_full <- model_data_valid_full[, master_coef_names] # reorder
+predictor_coefs <- coef_ci_sparse$Median
+names(predictor_coefs) <- coef_ci_sparse$Predictor
+predictor_coefs <- predictor_coefs[master_coef_names] # ensure match
+
+# predictions for valid data
+linear_predictor <- as.vector(model_data_valid_full %*% predictor_coefs)
+pred_prob <- 1 / (1 + exp(-linear_predictor))
+
+# BUGFIX
+if (length(validation_data) < length(pred_prob)) { 
+  validation_data <- validation_data[complete.cases(validation_data),]
+}
+
+validation_data$pred_prob <- pred_prob
+
+
+
+# compute ROC for training data
+
+# prepare training data
+data_complete_cc <- data_complete[complete.cases(data_complete),]
+model_data_train <- model.matrix(full_formula, data = data_complete_cc)
+current_coef_names_train <- colnames(model_data_train)
+missing_cols_train <- setdiff(master_coef_names, current_coef_names_train)
+if (length(missing_cols_train) > 0) {
+  zeros_matrix_train <- matrix(0, nrow = nrow(model_data_train),
+                               ncol = length(missing_cols_train))
+  colnames(zeros_matrix_train) <- missing_cols_train
+  model_data_train <- cbind(model_data_train, zeros_matrix_train)
+}
+extra_cols_train <- setdiff(current_coef_names_train, master_coef_names)
+if (length(extra_cols_train) > 0) {
+  model_data_train <-
+    model_data_train[, !(colnames(model_data_train) %in% extra_cols_train)]
+}
+model_data_train <- model_data_train[, master_coef_names]
+
+# predictions for training data
+linear_predictor_train <- as.vector(model_data_train %*% predictor_coefs)
+pred_prob_train <- 1 / (1 + exp(-linear_predictor_train))
+data_complete_cc$pred_prob <- pred_prob_train
+
+
+# ROCs
+roc_valid <- roc(validation_data$abst, validation_data$pred_prob)
+roc_train <- roc(data_complete_cc$abst, data_complete_cc$pred_prob)
+
+# plot ROC curves
+plot(roc_train, col = "red", main = "Lasso ROC")
+plot(roc_valid, add = TRUE, col = "blue")
+legend("bottomright",
+       legend = c(paste("Validation, AUC=", round(roc_valid$auc, 4)),
+                  paste("Training, AUC=", round(roc_train$auc, 4))),
+       fill = c("blue", "red"))
+
+```
+
+
+```{r q2resid, eval = F}
+# calc residuals
+data_complete_cc$residuals <- data_complete_cc$abst - data_complete_cc$pred_prob
+
+# plot residuals v. fitted
+ggplot(data_complete_cc, aes(x = pred_prob, y = residuals)) +
+  geom_point() +
+  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
+  labs(x = "Predicted Probability", y = "Residuals") +
+  ggtitle("Residuals vs. Predicted Probabilities")
+
+# Histogram of Residuals
+hist(data_complete_cc$residuals, main = "Histogram of Residuals")
+
+# Q-Q Plot of Residuals
+qqnorm(data_complete_cc$residuals)
+qqline(data_complete_cc$residuals)
+```
+
+
+```{r}
+# calibration plot
+num_cuts <- 100
+
+# Training Set
+calib_data_train <- data.frame(
+  prob = data_complete_cc$pred_prob,
+  bin = cut(data_complete_cc$pred_prob, breaks = num_cuts),
+  class = as.numeric(as.character(data_complete_cc$abst))
+)
+
+calib_data_train <- calib_data_train %>% 
+  group_by(bin) %>% 
+  summarise(
+    observed = sum(class) / n(), 
+    expected = mean(prob), 
+    se = sqrt(observed * (1 - observed) / n())
+  )
+
+
+calib_plot_train <- ggplot(calib_data_train) +
+  geom_line(aes(x = expected, y = expected, color = "Ideal")) +
+  geom_smooth(aes(x = expected, y = observed, color = "Loess Fit"), method = "loess") +
+  labs(
+    x = "Expected Proportion", 
+    y = "Observed Proportion", 
+    title = "Calibration: Training Data", 
+    color = "Legend"
+  ) +
+  theme_minimal() +
+  scale_color_manual(values = c("Ideal" = "red", "Loess Fit" = "blue"))
+
+# Validation Set
+calib_data_valid <- data.frame(
+  prob = validation_data$pred_prob,
+  bin = cut(validation_data$pred_prob, breaks = num_cuts),
+  class = as.numeric(as.character(validation_data$abst))
+)
+
+
+calib_data_valid <- calib_data_valid %>% 
+  group_by(bin) %>% 
+  summarise(
+    observed = sum(class) / n(), 
+    expected = mean(prob), 
+    se = sqrt(observed * (1 - observed) / n())
+  )
+
+calib_plot_valid <- ggplot(calib_data_valid) + 
+  geom_line(aes(x = expected, y = expected, color = "Ideal")) + 
+  geom_smooth(aes(x = expected, y = observed, color = "Loess Fit"), method = "loess") +
+  labs(
+    x = "Expected Proportion", 
+    y = "Observed Proportion",
+    title = "Calibration: Validation Data", 
+    color = "Legend"
+  ) +
+  theme_minimal() +
+  scale_color_manual(values = c("Ideal" = "red", "Loess Fit" = "blue"))
+
+calib_plot_combined <- ggarrange(
+  calib_plot_train, calib_plot_valid, 
+  ncol = 2, nrow = 1,
+  common.legend = TRUE, legend = "bottom"
+)
+
+print(calib_plot_combined)
+```
+
+
+```{r, fig.cap="Lasso Calibration Plot on Validation Data"}
+
+# calibration plot
+num_cuts <- 100
+
+# calibration for validation data
+test_calib <- data.frame(
+  prob = validation_data$pred_prob,
+  bin = cut(validation_data$pred_prob, breaks = num_cuts),
+  class = as.numeric(as.character(validation_data$abst))
+)
+
+test_calib <- test_calib %>% 
+  group_by(bin) %>% 
+  summarize(observed = sum(class)/n(), 
+            expected = sum(prob)/n(), 
+            se = sqrt(observed * (1-observed) / n()))
+
+cols <- c("Ideal"="red","loess_smooth"="black","lm_smooth"="blue")
+ggplot(test_calib) + 
+  geom_abline(aes(intercept = 0, slope = 1, color="Ideal")) + 
+  geom_smooth(aes(x = expected,
+                  y = observed,
+                  color="loess_smooth"), se=TRUE) +
+  geom_smooth(aes(x = expected,
+                  y = observed,
+                  color="lm_smooth"), se=FALSE, method="lm") +
+  scale_color_manual(values=cols) +
+  labs(x = "Expected Proportion",
+       y = "Observed Proportion",
+       title="") +
+  theme_minimal()
+
+```
+
+
+
+
+
+# Conclusion
+
+
+
+
+
+
+\newpage
+# References
+
+<div id="refs"></div>
+
+
+
+\newgeometry{left=15mm,right=15mm,top=15mm,bottom=25mm}
+
+
+\newpage
+# Appendix I: Script Code 
+
+```{r ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
+```
+
+
+
+
+\newpage
+# Appendix II: Functions Code 
+
+
+```{r}
+#| echo: true
+#| eval: true 
+#| file: _helpers.R
+```
