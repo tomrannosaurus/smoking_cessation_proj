@@ -520,14 +520,8 @@ data <- train_data
 
 Results are presented for bootstrapped Lasso regression on outcome abstinence, including main effects of baseline covariates and controlling for other treatments. Only coefficients with confidence intervals not containing zero are presented in the table of results (noted as significant).
 
-```{r}
+```{r main effects lasso w bootstrap}
 #GOOD; Q1; baseline
-
-# Def All Params
-B <- 50      # num of bootstraps
-m <- 5      # num of multiple imputations per bootstrap
-k <- 5      # num of cv folds for cv.glmnet
-poly_degree <- 3  # degree for polynomial terms
 
 # remove id 
 data_complete <- data %>% select(-id) 
@@ -590,55 +584,137 @@ nonzero_matrix <- matrix(0, nrow = B, ncol = total_coeffs)
 colnames(nonzero_matrix) <- master_coef_names
 
 
-```
 
-```{r, eval = F}
-# --- Bootstrap Loop ---
-set.seed(1) 
 
+# --- Main estimation and bootstrap loop ---
+# Def All Params
+B <- 200      # num of bootstraps 
+m <- 5       # num of multiple imputations per bootstrap
+k <- 5       # num of cv folds for cv.glmnet
+poly_degree <- 3  # degree for polynomial terms
+
+# --- Primary model fit on original data with imputation ---
+# Initial imputation for primary fit
+predictor_matrix <- make.predictorMatrix(data_complete)
+predictor_matrix[, "abst"] <- 0
+predictor_matrix["abst", ] <- 0
+imp_primary <- mice(data_complete, m = m, printFlag = FALSE, seed = 123,
+                   predictorMatrix = predictor_matrix, method = 'pmm')
+
+# Stack imputations for primary fit
+stacked_data_primary <- complete(imp_primary, action = "long", include = FALSE)
+stacked_data_primary <- stacked_data_primary %>% dplyr::select(-.id, -.imp)
+
+# Fix factor levels
+if (length(factor_vars) > 0) {
+  for (var in factor_vars) {
+    stacked_data_primary[[var]] <- factor(stacked_data_primary[[var]], 
+                                        levels = levels_list[[var]])
+  }
+}
+
+# Create model matrix for primary fit
+model_data_full <- model.matrix(full_formula, data = stacked_data_primary)
+x_primary <- model_data_full[, -1]
+y_primary <- stacked_data_primary$abst
+
+# Remove zero variance predictors and align columns
+zero_var_cols <- apply(x_primary, 2, function(x) var(x) == 0)
+if (any(zero_var_cols)) {
+  x_primary <- x_primary[, !zero_var_cols]
+  current_coef_names <- colnames(x_primary)
+} else {
+  current_coef_names <- colnames(x_primary)
+}
+
+# Align columns with master names
+master_coef_names_no_intercept <- master_coef_names[-1]
+missing_cols <- setdiff(master_coef_names_no_intercept, current_coef_names)
+if (length(missing_cols) > 0) {
+  zeros_matrix <- matrix(0, nrow = nrow(x_primary), ncol = length(missing_cols))
+  colnames(zeros_matrix) <- missing_cols
+  x_primary <- cbind(x_primary, zeros_matrix)
+}
+
+extra_cols <- setdiff(current_coef_names, master_coef_names_no_intercept)
+if (length(extra_cols) > 0) {
+  x_primary <- x_primary[, !(colnames(x_primary) %in% extra_cols)]
+}
+
+x_primary <- x_primary[, master_coef_names_no_intercept]
+
+# Fit primary Lasso model
+cv_lasso_primary <- cv.glmnet(
+  x = x_primary,
+  y = y_primary,
+  family = "binomial",
+  alpha = 1,
+  standardize = TRUE,
+  relax = FALSE
+)
+
+primary_fit <- glmnet(
+  x = x_primary,
+  y = y_primary,
+  family = "binomial",
+  alpha = 1,
+  lambda = cv_lasso_primary$lambda.min,
+  standardize = TRUE,
+  relax = FALSE
+)
+
+# Get aligned primary coefficients
+primary_coef_values <- as.vector(coef(primary_fit))
+primary_coef_names <- rownames(coef(primary_fit))
+names(primary_coef_values) <- primary_coef_names
+aligned_primary_coef <- setNames(rep(0, length(master_coef_names)), master_coef_names)
+matched_primary <- names(primary_coef_values) %in% master_coef_names
+aligned_primary_coef[names(primary_coef_values)[matched_primary]] <- 
+  primary_coef_values[matched_primary]
+
+# --- Bootstrap loop for confidence intervals ---
+coef_matrix <- matrix(NA, nrow = B, ncol = length(master_coef_names))
+colnames(coef_matrix) <- master_coef_names
+
+nonzero_matrix <- matrix(0, nrow = B, ncol = length(master_coef_names))
+colnames(nonzero_matrix) <- master_coef_names
+
+set.seed(1)
 for (b in 1:B) {
-  # Print progress
   cat("Bootstrap iteration:", b, "of", B, "\n")
   
-  # Stratified resampling with replacement (maintain class distribution in 'abst')
   bootstrap_sample <- data_complete %>%
     group_by(abst) %>%
     sample_frac(size = 1, replace = TRUE) %>%
     ungroup()
   
-  # impute data 
   predictor_matrix <- make.predictorMatrix(bootstrap_sample)
-  predictor_matrix[, "abst"] <- 0  # dont use 'abst' to predict others
-  predictor_matrix["abst", ] <- 0  # dont impute 'abst' (not necessary bc no missing?)
+  predictor_matrix[, "abst"] <- 0
+  predictor_matrix["abst", ] <- 0
   imp <- mice(bootstrap_sample, m = m, printFlag = FALSE, seed = b,
-              predictorMatrix = predictor_matrix, method = 'pmm')
+             predictorMatrix = predictor_matrix, method = 'pmm')
   
-  # Stack imputations into one dataset 
   stacked_data <- complete(imp, action = "long", include = FALSE)
-  stacked_data <- stacked_data %>% dplyr::select(-.id, -.imp) # remove '.id' / '.imp'
+  stacked_data <- stacked_data %>% dplyr::select(-.id, -.imp)
   
-  # fix factor levels in the entire dataset (ensure consistency) BUGFIX
   if (length(factor_vars) > 0) {
     for (var in factor_vars) {
       stacked_data[[var]] <- factor(stacked_data[[var]], levels = levels_list[[var]])
     }
   }
   
-  # boot model matrix and X / y
   model_data_full <- model.matrix(full_formula, data = stacked_data)
-  x <- model_data_full[, -1] # remove intercept for glmnet
-  y_impute <- stacked_data$abst # response var for glmnet
+  x <- model_data_full[, -1]
+  y_impute <- stacked_data$abst
   
-  # Remove predictors with zero variance BUGFIX
   zero_var_cols <- apply(x, 2, function(x) var(x) == 0)
   if (any(zero_var_cols)) {
     x <- x[, !zero_var_cols]
     current_coef_names <- colnames(x)
   } else {
-    current_coef_names <- colnames(x)}
+    current_coef_names <- colnames(x)
+  }
   
-  # align columns w/ master_coef_names excluding intercept BUGFIX
-  master_coef_names_no_intercept <- master_coef_names[-1]  # now exclude intercept
   missing_cols <- setdiff(master_coef_names_no_intercept, current_coef_names)
   if (length(missing_cols) > 0) {
     zeros_matrix <- matrix(0, nrow = nrow(x), ncol = length(missing_cols))
@@ -646,80 +722,57 @@ for (b in 1:B) {
     x <- cbind(x, zeros_matrix)
   }
   
-  # rm extra columns not in master_coef_names_no_intercept BUGFIX
   extra_cols <- setdiff(current_coef_names, master_coef_names_no_intercept)
   if (length(extra_cols) > 0) {
     x <- x[, !(colnames(x) %in% extra_cols)]
   }
   
-  # reorder x colums to match master_coef_names_no_intercept BUGFIX
   x <- x[, master_coef_names_no_intercept]
   
-
-  
-  # Run cv.glmnet
-  cv_lasso <- tryCatch({
-    cv.glmnet(
+  # Fit bootstrap model using same lambda as primary fit
+  boot_fit <- tryCatch({
+    glmnet(
       x = x,
       y = y_impute,
       family = "binomial",
       alpha = 1,
+      lambda = cv_lasso_primary$lambda.min,
       standardize = TRUE,
       relax = FALSE
     )
   }, error = function(e) {
-    cat("Error in cv.glmnet for bootstrap", b, ":", e$message, "\n")
+    cat("Error in glmnet for bootstrap", b, ":", e$message, "\n")
     return(NULL)
   })
   
-  if (is.null(cv_lasso)) {
-    next  # skip/move to next bootstrap iteration
+  if (is.null(boot_fit)) {
+    next
   }
   
-  # Fit Lasso 
-  lasso_fit <- glmnet(
-    x = x,
-    y = y_impute,
-    family = "binomial",
-    alpha = 1,
-    lambda = cv_lasso$lambda.min,
-    standardize = TRUE,
-    relax = FALSE
-  )
-
-  
-  # grab coefs including intercept
-  coef_values <- as.vector(coef(lasso_fit))
-  coef_names <- rownames(coef(lasso_fit))
+  coef_values <- as.vector(coef(boot_fit))
+  coef_names <- rownames(coef(boot_fit))
   names(coef_values) <- coef_names
   
-  # init object to store coefs names
   aligned_coef_values <- setNames(rep(0, length(master_coef_names)), master_coef_names)
-  
-  # match coefs to the aligned vector
   matched <- names(coef_values) %in% master_coef_names
   aligned_coef_values[names(coef_values)[matched]] <- coef_values[matched]
   
-  # store coefs
   coef_matrix[b, ] <- aligned_coef_values
-  
-  # store nonzero indicators
   nonzero_matrix[b, ] <- ifelse(aligned_coef_values != 0, 1, 0)
 }
-
 
 
 ```
 
 ```{r, eval = F}
-saveRDS(coef_matrix, file = "baseline_coef.rds")
-saveRDS(nonzero_matrix, file = "baseline_nonzero.rds")
+saveRDS(coef_matrix, file = "baseline_coef_CI-fix.rds")
+saveRDS(nonzero_matrix, file = "baseline_nonzero_CI-fix.rds")
 
 ```
 
 ```{r, eval = T}
-coef_matrix <- readRDS(file = "baseline_coef.rds")
-nonzero_matrix <- readRDS(file = "baseline_nonzero.rds")
+coef_matrix <- readRDS(file = "baseline_coef_CI-fix.rds")
+nonzero_matrix <- readRDS(file = "baseline_nonzero_CI-fix.rds")
 
 ```
 
@@ -1175,14 +1228,8 @@ Our moderator analysis revealed that anhedonia `shaps_score_pq1` significantly m
 
 
 ```{r}
-#GOOD; Q2; Moderator
-
-# Def All Params
-B <- 50      # num of bootstraps
-m <- 5      # num of multiple imputations per bootstrap
-k <- 5      # num of cv folds for cv.glmnet
-poly_degree <- 3  # degree for polynomial terms
-
+#GOOD; Q2; Moderator (INTERACTION MODEL TO BE UPDATED)
+#
 # remove id 
 data_complete <- data %>% select(-id) 
 
@@ -1239,62 +1286,148 @@ master_model_matrix <- model.matrix(full_formula, data = data_complete)
 master_coef_names <- colnames(master_model_matrix)
 total_coeffs <- length(master_coef_names)
 
-# init storage for coefs
-coef_matrix <- matrix(NA, nrow = B, ncol = total_coeffs)
+
+
+# --- Main estimation and bootstrap loop ---
+# Def All Params
+B <- 200      # num of bootstraps
+m <- 5       # num of multiple imputations per bootstrap
+k <- 5       # num of cv folds for cv.glmnet
+poly_degree <- 3  # degree for polynomial terms
+
+
+# --- Primary model fit with imputation ---
+# Initial imputation for primary fit
+predictor_matrix <- make.predictorMatrix(data_complete)
+predictor_matrix[, "abst"] <- 0
+predictor_matrix["abst", ] <- 0
+imp_primary <- mice(data_complete, m = m, printFlag = FALSE, seed = 123,
+                   predictorMatrix = predictor_matrix, method = 'pmm')
+
+# Stack imputations for primary fit
+stacked_data_primary <- complete(imp_primary, action = "long", include = FALSE)
+stacked_data_primary <- stacked_data_primary %>% dplyr::select(-.id, -.imp)
+
+# Fix factor levels
+if (length(factor_vars) > 0) {
+  for (var in factor_vars) {
+    stacked_data_primary[[var]] <- factor(stacked_data_primary[[var]], 
+                                        levels = levels_list[[var]])
+  }
+}
+
+# Create model matrix for primary fit
+model_data_full <- model.matrix(full_formula, data = stacked_data_primary)
+x_primary <- model_data_full[, -1]
+y_primary <- stacked_data_primary$abst
+
+# Remove zero variance predictors and align columns
+zero_var_cols <- apply(x_primary, 2, function(x) var(x) == 0)
+if (any(zero_var_cols)) {
+  x_primary <- x_primary[, !zero_var_cols]
+  current_coef_names <- colnames(x_primary)
+} else {
+  current_coef_names <- colnames(x_primary)
+}
+
+# Align columns with master names
+master_coef_names_no_intercept <- master_coef_names[-1]
+missing_cols <- setdiff(master_coef_names_no_intercept, current_coef_names)
+if (length(missing_cols) > 0) {
+  zeros_matrix <- matrix(0, nrow = nrow(x_primary), ncol = length(missing_cols))
+  colnames(zeros_matrix) <- missing_cols
+  x_primary <- cbind(x_primary, zeros_matrix)
+}
+
+extra_cols <- setdiff(current_coef_names, master_coef_names_no_intercept)
+if (length(extra_cols) > 0) {
+  x_primary <- x_primary[, !(colnames(x_primary) %in% extra_cols)]
+}
+
+x_primary <- x_primary[, master_coef_names_no_intercept]
+
+# Set up penalty factors for primary fit
+penalty_factors_primary <- ifelse(grepl(":", colnames(x_primary)), 1, 0)
+
+# Verify penalty factor dimensions
+if (ncol(x_primary) != length(penalty_factors_primary)) {
+  stop("Mismatch between x columns and penalty_factors length in primary fit")
+}
+
+# Fit primary Lasso model with penalty factors
+cv_lasso_primary <- cv.glmnet(
+  x = x_primary,
+  y = y_primary,
+  family = "binomial",
+  alpha = 1,
+  penalty.factor = penalty_factors_primary,
+  standardize = TRUE,
+  relax = FALSE
+)
+
+primary_fit <- glmnet(
+  x = x_primary,
+  y = y_primary,
+  family = "binomial",
+  alpha = 1,
+  lambda = cv_lasso_primary$lambda.min,
+  penalty.factor = penalty_factors_primary,
+  standardize = TRUE,
+  relax = FALSE
+)
+
+# Get aligned primary coefficients
+primary_coef_values <- as.vector(coef(primary_fit))
+primary_coef_names <- rownames(coef(primary_fit))
+names(primary_coef_values) <- primary_coef_names
+aligned_primary_coef <- setNames(rep(0, length(master_coef_names)), master_coef_names)
+matched_primary <- names(primary_coef_values) %in% master_coef_names
+aligned_primary_coef[names(primary_coef_values)[matched_primary]] <- 
+  primary_coef_values[matched_primary]
+
+# --- Bootstrap loop for confidence intervals ---
+coef_matrix <- matrix(NA, nrow = B, ncol = length(master_coef_names))
 colnames(coef_matrix) <- master_coef_names
 
-# init object for nonzero coef indicator
-nonzero_matrix <- matrix(0, nrow = B, ncol = total_coeffs)
+nonzero_matrix <- matrix(0, nrow = B, ncol = length(master_coef_names))
 colnames(nonzero_matrix) <- master_coef_names
-```
 
-```{r, eval = F}
-# --- Bootstrap Loop ---
-set.seed(1) 
-
+set.seed(1)
 for (b in 1:B) {
-  # Print progress
   cat("Bootstrap iteration:", b, "of", B, "\n")
   
-  # Stratified resampling with replacement (maintain class distribution in 'abst')
   bootstrap_sample <- data_complete %>%
     group_by(abst) %>%
     sample_frac(size = 1, replace = TRUE) %>%
     ungroup()
   
-  # impute data 
   predictor_matrix <- make.predictorMatrix(bootstrap_sample)
-  predictor_matrix[, "abst"] <- 0  # dont use 'abst' to predict others
-  predictor_matrix["abst", ] <- 0  # dont impute 'abst' (not necessary bc no missing?)
+  predictor_matrix[, "abst"] <- 0
+  predictor_matrix["abst", ] <- 0
   imp <- mice(bootstrap_sample, m = m, printFlag = FALSE, seed = b,
-              predictorMatrix = predictor_matrix, method = 'pmm')
+             predictorMatrix = predictor_matrix, method = 'pmm')
   
-  # Stack imputations into one dataset 
   stacked_data <- complete(imp, action = "long", include = FALSE)
-  stacked_data <- stacked_data %>% dplyr::select(-.id, -.imp) # remove '.id' / '.imp'
+  stacked_data <- stacked_data %>% dplyr::select(-.id, -.imp)
   
-  # fix factor levels in the entire dataset (ensure consistency) BUGFIX
   if (length(factor_vars) > 0) {
     for (var in factor_vars) {
       stacked_data[[var]] <- factor(stacked_data[[var]], levels = levels_list[[var]])
     }
   }
   
-  # boot model matrix and X / y
   model_data_full <- model.matrix(full_formula, data = stacked_data)
-  x <- model_data_full[, -1] # remove intercept for glmnet
-  y_impute <- stacked_data$abst # response var for glmnet
+  x <- model_data_full[, -1]
+  y_impute <- stacked_data$abst
   
-  # Remove predictors with zero variance BUGFIX
   zero_var_cols <- apply(x, 2, function(x) var(x) == 0)
   if (any(zero_var_cols)) {
     x <- x[, !zero_var_cols]
     current_coef_names <- colnames(x)
   } else {
-    current_coef_names <- colnames(x)}
+    current_coef_names <- colnames(x)
+  }
   
-  # align columns w/ master_coef_names excluding intercept BUGFIX
-  master_coef_names_no_intercept <- master_coef_names[-1]  # now exclude intercept
   missing_cols <- setdiff(master_coef_names_no_intercept, current_coef_names)
   if (length(missing_cols) > 0) {
     zeros_matrix <- matrix(0, nrow = nrow(x), ncol = length(missing_cols))
@@ -1302,72 +1435,51 @@ for (b in 1:B) {
     x <- cbind(x, zeros_matrix)
   }
   
-  # rm extra columns not in master_coef_names_no_intercept BUGFIX
   extra_cols <- setdiff(current_coef_names, master_coef_names_no_intercept)
   if (length(extra_cols) > 0) {
     x <- x[, !(colnames(x) %in% extra_cols)]
   }
   
-  # reorder x colums to match master_coef_names_no_intercept BUGFIX
   x <- x[, master_coef_names_no_intercept]
   
-  # penalty factors
-  penalty_factors <- ifelse(grepl(":", master_coef_names_no_intercept), 1, 0)
+  # Set penalty factors for bootstrap iterations
+  penalty_factors <- ifelse(grepl(":", colnames(x)), 1, 0)
   
-  # verify dims BUGFIX
+  # Verify penalty factor dimensions
   if (ncol(x) != length(penalty_factors)) {
-    stop("Mismatch between x columns and penalty_factors length")
+    stop("Mismatch between x columns and penalty_factors length in bootstrap")
   }
   
-  # Run cv.glmnet
-  cv_lasso <- tryCatch({
-    cv.glmnet(
+  # Fit bootstrap model using same lambda as primary fit and penalty factors
+  boot_fit <- tryCatch({
+    glmnet(
       x = x,
       y = y_impute,
       family = "binomial",
       alpha = 1,
+      lambda = cv_lasso_primary$lambda.min,
       penalty.factor = penalty_factors,
       standardize = TRUE,
       relax = FALSE
     )
   }, error = function(e) {
-    cat("Error in cv.glmnet for bootstrap", b, ":", e$message, "\n")
+    cat("Error in glmnet for bootstrap", b, ":", e$message, "\n")
     return(NULL)
   })
   
-  if (is.null(cv_lasso)) {
-    next  # skip/move to next bootstrap iteration
+  if (is.null(boot_fit)) {
+    next
   }
   
-  # Fit Lasso 
-  lasso_fit <- glmnet(
-    x = x,
-    y = y_impute,
-    family = "binomial",
-    alpha = 1,
-    lambda = cv_lasso$lambda.min,
-    penalty.factor = penalty_factors,
-    standardize = TRUE,
-    relax = FALSE
-  )
-
-  
-  # grab coefs including intercept
-  coef_values <- as.vector(coef(lasso_fit))
-  coef_names <- rownames(coef(lasso_fit))
+  coef_values <- as.vector(coef(boot_fit))
+  coef_names <- rownames(coef(boot_fit))
   names(coef_values) <- coef_names
   
-  # init object to store coefs names
   aligned_coef_values <- setNames(rep(0, length(master_coef_names)), master_coef_names)
-  
-  # match coefs to the aligned vector
   matched <- names(coef_values) %in% master_coef_names
   aligned_coef_values[names(coef_values)[matched]] <- coef_values[matched]
   
-  # store coefs
   coef_matrix[b, ] <- aligned_coef_values
-  
-  # store nonzero indicators
   nonzero_matrix[b, ] <- ifelse(aligned_coef_values != 0, 1, 0)
 }
 
@@ -1376,14 +1488,14 @@ for (b in 1:B) {
 ```
 
 ```{r, eval = F}
-saveRDS(coef_matrix, file = "moderators_coef.rds")
-saveRDS(nonzero_matrix, file = "moderators_nonzero.rds")
+saveRDS(coef_matrix, file = "moderators_coef_CI-fix.rds")
+saveRDS(nonzero_matrix, file = "moderators_nonzero_CI-fix.rds")
 
 ```
 
 ```{r, eval = T}
-coef_matrix <- readRDS(file = "moderators_coef.rds")
-nonzero_matrix <- readRDS(file = "moderators_nonzero.rds")
+coef_matrix <- readRDS(file = "moderators_coef_CI-fix.rds")
+nonzero_matrix <- readRDS(file = "moderators_nonzero_CI-fix.rds")
 
 ```
 
@@ -1754,7 +1866,7 @@ qqline(data_complete_cc$residuals)
 ```{r, fig.cap="Lasso Calibration Plot on Validation Data"}
 
 # calibration plot
-num_cuts <- 100
+num_cuts <- 24
 
 # calibration for validation data
 test_calib <- data.frame(
