@@ -1,7 +1,7 @@
 ---
 title: \small \vspace{-.5cm} Variable Selection and Regression Analysis of Smoking Cessation Outcomes Using Regularization$\colon$
 subtitle: \small \vspace{-.1cm} A Reanalysis of the BASC-Varenicline Trial Data
-author: \small \vspace{-.3cm} Thomas B. Arnold
+author: \vspace{-.3cm} \small  Thomas B. Arnold
 #date: today
 #date-format: long
 format:
@@ -44,7 +44,6 @@ editor_options:
 #   pROC 1.18.4
 #   gt 0.9.0
 #   gtsummary 1.7.2
-#   glue
 
 
 setwd("~/GitHub/smoking_cessation_proj")
@@ -75,7 +74,6 @@ library(caret)
 library(pROC)
 library(gtsummary)
 library(gt)
-library(glue)
 
 source("_helpers.R")
 
@@ -87,18 +85,43 @@ Note: "vspace" below reduces space between title and first paragraph.
 :::
 \vspace{-2cm} 
 
+
+
+:::{.content-hidden}
+*NOTE* **-- Overall**
+- Major changes in this version are an increase in the number of bootstrap iterations (from B = 50 to B = 6,000) and a refocusing of the bootstrap process to estimate confidence intervals (CIs) only rather than estimating both CIs and coefficients.
+- Notable that increasing the bootstrap iterations causes the interaction of BA and SHAPS score to lose significance in the moderator model.
+- Another interesting consequence of the change is that our "enforce sparsity" procedure no longer functions in a useful way (the model either overfits when sparsity isn't enforced, or if even one single coefficient is zeroed out by sparsity enforcement the model fit is destoryed and the model has essentially no discriminatory power).
+
+*TODO* **-- Overall**
+[] Previously coefficient estimates happened within the bootstrap, update to use single primary lasso for coefficient estimates and focus bootstrap on CI
+[] Check for all cascading consequences of this change above
+[] Fix variable names versus English names throughout
+[] Fix BA abbreviation to always use BA not BASC
+[] Ensure consistent case for "Lasso" throughout
+[x] Fix code for using bootstrap only for CI
+[] Fix hard coded numeric values from model results within prose
+
+***Reflection***
+TBD
+
+:::
+
+
+
 # Abstract
 
 
 Background: Individuals with past or present major depressive disorder (MDD) experience unique barriers to smoking cessation. While varenicline has been shown to be more effective than traditional nicotine replacement therapy in achieving abstinence for individuals with and without MDD, its lower effectiveness for those with MDD suggests that MDD-responsive treatment strategies are necessary. A recent determined that varenicline improved abstinence, but BASC did not, either with or without varenicline. In light of this surprising result, we use data from this study to examine baseline variables as potential predictors of end-of-treatment abstinence and moderators of behavioral treatment's effect thereon.
 
 
-Methods: We examine data from a randomized, placebo-controlled 2x2 factorial design study of 300 smokers with past or present MDD, who received either placebo or varenicline and standard treatment (ST) or behavioral activation for smoking cessation (BASC). Missing data was imputed through multiple imputation. A cross-validated Lasso was applied at the optimally chosen value of lamda for five imputed data sets within n-many bootstrap re-samples. 
+Methods: We examine data from a randomized, placebo-controlled 2x2 factorial design study of 300 smokers with past or present MDD, who received either placebo or varenicline and standard treatment (ST) or behavioral activation for smoking cessation (BA). Missing data was imputed through multiple imputation. A cross-validated Lasso was applied at the optimally chosen value of $\lambda$ for coefficient estimates. Subsequently a bootstrap procedure is carried out to estimate confidence intervals and assess significance of the coefficients.
 
 
-Results: The participant's Fagerstrom Test for Cigarette Dependence score, complementary reinforcers (i.e., pleasurable events associated with smoking), and the log of the participant's Nicotine Metabolite Ratio were all baseline predictors of abstinence controlling for treatment type. The model demonstrated good discriminative ability (validation AUC=0.78). Our moderator analysis revealed that baseline anhedonia significantly moderated the effect of behavioral activation treatment, with BA showing increased effectiveness for participants with lower anhedonia levels.
+Results: The participant's Fagerstrom Test for Cigarette Dependence score, complementary reinforcers (i.e., pleasurable events associated with smoking), and the log of the participant's Nicotine Metabolite Ratio were all baseline predictors of abstinence controlling for treatment type. The model demonstrated good discriminative ability (validation AUC=*TODO: XXX*). Our moderator analysis demonstrated that no variables could be identified as potential moderators of the therapy based treatment (BA or ST).
 
-Conclusion: Lasso regression identified both meaningful predictors of abstinence and treatment effect moderators with moderately good discrimination power, suggesting potential pathways for treatment personalization in smoking cessation for individuals with MDD. The effectiveness of behavioral activation treatment appears to vary with baseline anhedonia levels, indicating that anhedonia may be an important consideration in treatment selection. However, limitations including the relatively small sample size, which led to convergence issues and challenges handling class imbalance in the outcome, suggest these findings should be validated in larger studies. Future research might benefit from more sophisticated regularization approaches and larger, more diverse samples to better understand treatment effect heterogeneity in this population.
+
+Conclusion: Lasso regression with bootstrap confidence interval estimates identified meaningful predictors of abstinence. *TODO: INSERT SENTENCE ABOUT IDENTIFIED PREDICTORS.* We were unable to identify treatment effect moderators. Limitations include the relatively small sample size, which led to convergence issues and challenges handling class imbalance in the outcome which suggests these findings should be validated in larger studies. Future research might benefit from more sophisticated regularization approaches and larger, more diverse samples to better understand treatment effect heterogeneity in this population.
 
 
 # Introduction
@@ -113,11 +136,16 @@ The data in our study is derived from a recent randomized, placebo-controlled tr
 
 The Hitsman study from which we draw our data uses a 2x2 factorial design, with 300 participants with past or present MDD treated, over 12 weeks, with BASC or ST alongside placebo or varenciline. Although the Hitsman study found that BASC did not outperform ST with respect to abstinence at 27 weeks, with or without varenicline, it did find that varenicline improved short- and longer-term abstinence compared to placebo [@hitsman2023efficacy]. The dual goals of our analysis of the @hitsman2023efficacy data will be to assess whether and how baseline variables (1) moderate behavioral treatment's effect on end-of-treatment (EOT) abstinence and (2) predict EOT abstinence, controlling for pharmaceutical and behavioral treatments.
 
-In order to accomplish these dual goals, we use regularized linear models. Regularization, also known as shrinkage, reduces variance by fitting a model with all $p$ predictors, with the estimated coefficients shrunken towards zero relative to the least square estimates (@hastie2009introduction; pp. 204). We use this technique here because our goal can be understood as a variable selection problem. The Lasso method of regularization, which comepls some of the coefficients to be exactly equal to zero, can also be used for variable selection [@hastie2009introduction; pp. 204, 219]. Best subset regression seeks the optimal subset of predictors by evaluating all possible combinations, thereby ensuring selection of the model with the lowest prediction error, although at a computational cost that increases exponentially with the number of predictors [@hazimeh2020fast; @hastie2015statistical]. In contrast, L0+L2 regularization combines the sparsity-promoting L0 penalty, which counts the number of non-zero coefficients, with the L2 penalty that shrinks coefficients towards zero without zeroing them, effectively balancing variable selection with the need to manage multicollinearity and enhance model accuracy [@hazimeh2020fast; @hastie2015statistical; @paul2550presentation]. The relaxed lasso, a modification of the Lasso method, initially applies the Lasso to determine a subset of variables by shrinking some coefficients to zero, then refits these selected variables with a reduced or absent Lasso penalty, potentially reducing bias while retaining the variable selection advantage of the original Lasso approach [@meinshausen2007relaxed]. L0+L2 and relaxed Lasso are considered the best trade-offs between variable selection and goodness of fit [@paul2550presentation; hazimeh2020fast]. Best subset, L0+L2, and relaxed Lasso are more computationally difficult than standard lasso. 
+In order to accomplish these dual goals, we use regularized linear models. Regularization, also known as shrinkage, reduces variance by fitting a model with all $p$ predictors, with the estimated coefficients shrunken towards zero relative to the least square estimates (@hastie2009introduction; pp. 204). We use this technique here because our goal can be understood as a variable selection problem. The Lasso method of regularization, which comepls some of the coefficients to be exactly equal to zero, can also be used for variable selection [@hastie2009introduction; pp. 204, 219]. Best subset regression seeks the optimal subset of predictors by evaluating all possible combinations, thereby ensuring selection of the model with the lowest prediction error, although at a computational cost that increases exponentially with the number of predictors [@hazimeh2020fast; @hastie2015statistical]. 
+
+In contrast, L0+L2 regularization combines the sparsity-promoting L0 penalty, which counts the number of non-zero coefficients, with the L2 penalty that shrinks coefficients towards zero without zeroing them, effectively balancing variable selection with the need to manage multicollinearity and enhance model accuracy [@hazimeh2020fast; @hastie2015statistical; @paul2550presentation]. The relaxed lasso, a modification of the Lasso method, initially applies the Lasso to determine a subset of variables by shrinking some coefficients to zero, then refits these selected variables with a reduced or absent Lasso penalty, potentially reducing bias while retaining the variable selection advantage of the original Lasso approach [@meinshausen2007relaxed]. L0+L2 and relaxed Lasso are considered the best trade-offs between variable selection and goodness of fit [@paul2550presentation; hazimeh2020fast]. Best subset, L0+L2, and relaxed Lasso are more computationally difficult than standard Lasso. 
+
+Another important extension of the Lasso regularization technique are those techniques which allow for specification of groups, order, or structure within the covariates such that penalties are applied with respect to the structure rather than individual covariates independently. These techniques include hierarchical Lasso [@bien2013lasso], group Lasso [@meier2008group; simon2012standardization], and sparse-group Lasso [@simon2013sparse]. This structural approach is particularly valuable when dealing with features that have natural groupings or hierarchical relationships, such as we examining complex interaction terms. As with he extensions of Lasso mentioned above, these techniques are less computationally efficient than standard Lasso. For this reason we opt to focus on application of the standard Lasso and leave extensions to modified Lasso regressions to future work.
 
 :::{.content-hidden}
 *TODO*
-[] Add note in paragraph above that makes it clear that we only use L2 regularization in this paper
+[x] Add note in paragraph above that makes it clear that we only use L2 regularization in this paper
+[x] Add note in paragraph above about group and hierarchical Lasso
 
 ***Reflection***
 TBD
@@ -135,45 +163,43 @@ TBD
 
 First, we note that all covariates, other than abstinence (`abst`), are baseline variables. The following variables are binary: pharmacotherapy (`Var`); psychotherapy (`BA`); sex (`sex_ps`); indicators of whether the participant identifies as non-Hispanic white, Black, and/or Hispanic (`NHW`, `Black`, and `Hisp`); whether the individual smokes within five minutes of waking up (`ftcd.5.mins`); other lifetime DSM-5 diagnosis (`otherdiag`); whether the participant takes antidepressant medication (`antidepmed`); current or past MDD (`mde_curr`); and exclusive use of methylated cigarettes (`Only.Menthol`). The numeric variables are age (`age_ps`); cigarettes per day (`cpd_ps`); and Nicotine Metabolism Ratio (`NMR`). All remaining variables are ordinal. However, we treat income (`inc`) and education (`edu`) as ordinal, but (as we discuss below) treat the following variables as numeric: FTCD score (`ftcd_score`); `bdi_score_pq1`; cigarette reward value (`crv_total_pg1`); substitute reinforcer score (`hedonsum_n_pq1`); complementary reinforcer score (`hedonsum_y_pq1`); anhedonia (`shaps_score_pg1`); and readiness to quit smoking (`readiness`).
 
+The `ftcd_score` is the participant's score on the Fagerstrom Test for Cigarette Dependence, a six-item survey intended to evaluate the quantity of cigarette consumption, dependence, and compulsion to smoke; answers are scored and summed to yield a total score of 0-10, with higher scores indicating a greater physical dependence on nicotine [@fagerstrom2011determinants]. The `bdi_score_pq1` is the participant's score on the Beck Depression Inventory, or BDI-II, a 21-item survey scored from 0 to 63 measuring the severity of depression, with higher scores indicating greater severity [@beck1996beck].
+
+The `crv_total_pq1` score measures the participant's score on a questionnaire measuring preference for smoking over other traditionally rewarding activities, measured on a scale of 0 to 15, where 1 point is added for each time the participant chooses smoking [@spring2003reward]. Substitute and complimentary reinforcer scores (`hedonsum_n_pq1` and `hedonsum_y_pg1`) come from a participant's score of the cross-product of frequency (measured from 0 to 2) and level of enjoyableness (0 to 2) for a 45-item version of the Pleasant Events Schedule [@macphillamy1982pleasant]; based on the participant's report of whether an event is or is not associated with smoking, it is designated a complementary or substitute reinforcer, the cross products of which are summed.  
+
+Anhedonia (`shaps_score_pq1`) is assessed with the 14-item Snaith-Hamilton Pleasure Scale (SHAPS), where 14 statements are ranked on a 4-point Likert scale, with higher scores indicating greater enjoyment of typically rewarding experiences [@snaith1995scale]. Nicotine metabolism ratio, otherwise known as nicotine metabolite ratio (`NMR`), is calculated as the ratio of 3'hydroxycotinine (3HC) to cotinine; NMR is a biomarker where higher NMR is associated with faster metabolism of nicotine [@siegel2020use]. 
+
 :::{.content-hidden}
 *TODO*
-[] After paragraph above, replace variable names with their English counterparts (safe because we defined them clearly in paragraph above)
+[] After section above, replace variable names with their English counterparts (safe because we defined them clearly in paragraph above), OR if variable names need to be included for clarity, use the English name and then the variable name in a parenthetical.
 
 ***Reflection***
 Better readability is important for communicating work.
 :::
 
 
-The `ftcd_score` is the participant's score on the Fagerstrom Test for Cigarette Dependence, a six-item survey intended to evaluate the quantity of cigarette consumption, dependence, and compulsion to smoke; answers are scored and summed to yield a total score of 0-10, with higher scores indicating a greater physical dependence on nicotine [@fagerstrom2011determinants].
-
-The `bdi_score_pq1` is the participant's score on the Beck Depression Inventory, or BDI-II, a 21-item survey scored from 0 to 63 measuring the severity of depression, with higher scores indicating greater severity [@beck1996beck].
-
-The `crv_total_pq1` score measures the participant's score on a questionnaire measuring preference for smoking over other traditionally rewarding activities, measured on a scale of 0 to 15, where 1 point is added for each time the participant chooses smoking [@spring2003reward].
-
-Substitute and complimentary reinforcer scores (`hedonsum_n_pq1` and `hedonsum_y_pg1`) come from a participant's score of the cross-product of frequency (measured from 0 to 2) and level of enjoyableness (0 to 2) for a 45-item version of the Pleasant Events Schedule [@macphillamy1982pleasant]; based on the participant's report of whether an event is or is not associated with smoking, it is designated a complementary or substitute reinforcer, the cross products of which are summed.  
-
-Anhedonia (`shaps_score_pq1`) is assessed with the 14-item Snaith-Hamilton Pleasure Scale (SHAPS), where 14 statements are ranked on a 4-point Likert scale, with higher scores indicating greater enjoyment of typically rewarding experiences [@snaith1995scale].
-
-Nicotine metabolism ratio, otherwise known as nicotine metabolite ratio (`NMR`), is calculated as the ratio of 3'hydroxycotinine (3HC) to cotinine; `NMR` is a biomarker where higher `NMR` is associated with faster metabolism of nicotine [@siegel2020use]. 
-
-
 ## Exploratory Data Analysis 
 
 The original paper uses a 2x2 factorial design. However, we choose to keep the treatment variables separate because the sample size is very small and further reducing the sample size to the four groups at issue would significantly limit the Lasso's ability to fit the data. That the 2x2 factorial design is not necessary to answer the research question validates our choice.
 
-In addition to summary statistics available in Table 1 and the correlation matrix, we also inspect univariate histograms (omitted for space) for all variables. Bivariate plots with the outcome are omitted because the outcome is binary.
+In addition to summary statistics available in Table 1 and the correlation matrix, we also inspect univariate histograms (omitted for space) for all variables. This reveals one non-normal variable, NMR, for which we consider transformations as noted below. Bivariate relationships are explored in Figure 1. Additionally we examine the distribution and association of all variables between levels of `abst`, `BA`, and `Var` (tables omitted for space). 
 
-Additionally we examine the distribution and association of all variables between levels of `abst`, `BA`, and `Var` (tables omitted for space). When dividing the sample for each variable by `abst` we see that there is a significant difference between those who abstain and those who do no in the `Var`. This is because of the noted effectiveness of the treatment `Var`. We also observe marginal significance in the variable `ftcd_score` with abstainers having lower baseline scores. This could be a confounder, but makes logical sense as higher `ftcd_score` indicates greater dependency which would make it more difficult to abstain. There are no other significant differences in variables between groups of `abst`. Finally, when dividing the sample for each variable by `BA` we see that there are no significant differences in variables between groups of `BA`. Lastly, when dividing the sample for each variable by `Var` we see one significant difference in `abst`, essentially a mirror image of the difference discussed prior.
+When dividing the sample for each variable by `abst` we see that there is a significant difference between those who abstain and those who do no in the `Var`. This is because of the noted effectiveness of the treatment `Var`. We also observe marginal significance in the variable `ftcd_score` with abstainers having lower baseline scores. This could be a confounder, but makes logical sense as higher `ftcd_score` indicates greater dependency which would make it more difficult to abstain. There are no other significant differences in variables between groups of `abst`. Finally, when dividing the sample for each variable by `BA` we see that there are no significant differences in variables between groups of `BA`. Lastly, when dividing the sample for each variable by `Var` we see one significant difference in `abst`, essentially a mirror image of the difference discussed prior.
 
 
 We note that certain survey variables, specifically `ftcd_score`, `crv_total_pq1`, `readiness`, `shaps_score_pq1`, `hedonsum_y_pq1`, and `hedonsum_n_pq1` are ordinal but will be treated here as either numeric integers or continuous for the purpose of the modeling. This presents a limitation in that we are treating ordinal variables as evenly spaced. Doing so is more or less justifiable for different variables. For example, we are more justified in treating `hedonsum_y_pq1` and `hedonsuum_n_pq1` as continuous, given that each score is made up of the product of two ordinal scales; by using the cross-product, the study authors have made some assumptions about relative scale that obfuscates the ordinal nature of the original. 
 
 Nevertheless, treating these variables as ordinal is untenable here, as it would make individual cell sizes incredibly small and lead to parameter proliferation in modeling. Another potential solution would be grouping ordinal variables into discernible levels, as with `inc`, discussed below, but this would take an in-depth understanding of the meaning and spacing for each score that we do not have at present. Said another way, grouping the variables without fully understanding how relative distance between ordinal levels is expressed would lead to our making similar assumptions about the spacing between levels as we make in treating the variables as continuous. We note this is consistent with the handling of survey score variables in Table 1 of the original paper.
 
-To ameliorate the potential loss of accurate fit from treating ordinal variables as numeric, we use polynomial fit for each variable, allowing non-linearities between the log odds ratio for these variables and the outcome. The default contrast handling for ordinal covariates in R is a polynomial contrast. Applying the polynomial score transformation approximates this relationship, without incurring the cost of a parameter for all but one level of the variable. 
+To ameliorate the potential loss of accurate fit from treating ordinal variables as numeric, we use polynomial fit for each variable, allowing non-linearities between the log odds ratio for these variables and the outcome. The default contrast handling for ordinal covariates in R is a polynomial contrast. Applying the polynomial score transformation approximates this relationship, without incurring the cost of a parameter for all but one level of the variable. We note that this polynomial relationship is important to the predictive power of the model. Further, these polynomial terms allow us to model and interpret predictions for the outcome across the full scale of ordinal covariates even when that relationship is non-linear. Future work could examine fitting a model without these polynomial terms, which would trade interpretability for parsimony. 
 
+:::{.content-hidden}
+*TODO*
+[x] Add note about why we do not do polynomial sensitivity analysis
 
-
+***Reflection***
+A sensitivity analysis for removing polynomial terms would be a useful future endeavor, but we opt to keep the polynomial terms to allow us to interpret the non-linear relationship between some ordinal variables and the outcome. One weakness in using the polynomial terms as they currently exist in the model is that they are not orthogonalized polynomials (which were considered, but removed due to convergence issues).
+:::
 
 ```{r read-in and clean}
 data <- read.csv("data/project2.csv", comment.char="#")
@@ -355,6 +381,15 @@ tbl
    
 \vspace{-1cm}
 
+
+:::{.content-hidden}
+*TODO*
+[x] Replace old table 1 with table 1 similar to original paper
+
+***Reflection***
+The new table 1 is more informationally dense and succinctly conveys the different characteristics by treatment combination. It is particularly useful in supporting our decision to not use four separate treatment groups (2x2 factorial, as in the original paper) but rather include the pharmacotherapy and psychotherapy as independent variables because it illustrates the small cell sizes encountered as a result of the factorial handling.
+:::
+
 ```{r, eval=FALSE}
 #| label: tbl-1_old
 #| tbl-cap: "Summary of Variables" 
@@ -519,7 +554,7 @@ Other notable decisions include omission of `Hisp` due to insufficient sample si
 
 We further note that based on our correlation matrix there is a very high correlation (well over 85%) between `NHW` and `Black`. This issue combined with the issue noted previously lead us to also drop the `NHW` variable. We also note that use of only menthol cigarettes is highly correlated with both `NHW`, `Black`, `inc`, and `edu`. This is a concern, but as menthol cigarette use may be a unique trait and we are conducting regularized regression, we elect to leave this variable in the model and allow the penalty to aid our choice. 
 
-We conclude by grouping levels of `edu` and `inc` to limit parameter proliferation and allow for estimation and model convergence, given that Table 1 shows that there is insufficient sample within each level when not grouped. And, to take the log of the one true continuous variable, `NMR`, to encourage normality. Regarding the last decision, we do not assume normality, but note that normalizing transformations can encourage convergence and simplify the loss landscape. 
+*TODO: We conclude by grouping levels of `edu` and `inc` to limit parameter proliferation and allow for estimation and model convergence, given that Table 1 shows that there is insufficient sample within each level when not grouped. And, to take the log of the one true continuous variable, `NMR`, to encourage normality. Regarding the last decision, we do not assume normality, but note that normalizing transformations can encourage convergence and simplify the loss landscape.*
 
 Finally, we note that there is a minor class imbalance issue (~2.1:10). The outcome is somewhat rare, and this could lead to model fitting issues. Correcting for this class imbalance is a potential area for improvement and a limitation.
 
@@ -559,7 +594,7 @@ ggplot(melt(psuedo_cor_matrix), aes(x = Var2, y = Var1, fill = value)) +
 
 ### Missingness
 
-We examined the amount of missing data by variable and by sample. The most missing data in any singe record is two missing variables. There are seven variables missing data. The most missing data exists in `NMR` with 21 missing values (7%). There are 241 complete cases, which would reduce our sample by 59 records. This strongly suggests the need for imputation. After inspecting the data, we ran Little's test for MCAR. The null hypothesis for this test is that the data are not MCAR. The p-value was over 0.05, so we cannot reject the null hypothesis. We conclude that there is evidence that these data are missing completely at random.  Missing data in covariates will be imputed during the bootstrap process to preserve the already limited sample available.
+We examined the amount of missing data by variable and by sample. The most missing data in any single record is two missing variables. There are seven variables missing data. The most missing data exists in `NMR` with 21 missing values (7%). There are 241 complete cases, which would reduce our sample by 59 records. This strongly suggests the need for imputation. After inspecting the data, we ran Little's test for MCAR. The null hypothesis for this test is that the data are not MCAR. The p-value was over 0.05, so we cannot reject the null hypothesis. We conclude that there is evidence that these data are missing completely at random.  Missing data in covariates will be imputed during the bootstrap process to preserve the already limited sample available.
 
 ```{r missingness, eval = F}
 
@@ -600,7 +635,7 @@ First, we perform an 80/20 validation training split, where each split has the s
 
 After the estimates are derived from the bootstrap procedure, we evaluate the model's performance using the validation data. We tested the model's performance using the pooled estimates on validation data in order to assess calibration and discrimination. For the former, we use calibration plots comparing the model's abstinence predictions to the study's actual results. For the latter, we use AUC and ROC to test whether the model could correctly identify participants who were or were not abstinent.
 
-For the main effects model, enforcement of additional sparsity beyond the Lasso's inherent variable selection was unnecessary, as the number of parameters relative to sample size did not suggest overfitting. However, the moderator model, which included interaction terms with BA treatment, presented a higher risk of overfitting due to the substantially increased number of parameters. Therefore, we implemented additional sparsity criteria for the moderator model: coefficients were retained in the final model only if they were consistently selected (non-zero) across a high proportion of bootstrap iterations (threshold = 0.90). This approach helps prevent overfitting by ensuring that selected moderators demonstrate robust relationships with the outcome across multiple bootstrap samples, rather than capturing spurious associations that might arise from the increased model complexity introduced by interaction terms.
+*TODO For the main effects model, enforcement of additional sparsity beyond the Lasso's inherent variable selection was unnecessary, as the number of parameters relative to sample size did not suggest overfitting. However, the moderator model, which included interaction terms with BA treatment, presented a higher risk of overfitting due to the substantially increased number of parameters. Therefore, we implemented additional sparsity criteria for the moderator model: coefficients were retained in the final model only if they were consistently selected (non-zero) across a high proportion of bootstrap iterations (threshold = 0.90). This approach helps prevent overfitting by ensuring that selected moderators demonstrate robust relationships with the outcome across multiple bootstrap samples, rather than capturing spurious associations that might arise from the increased model complexity introduced by interaction terms.*
 
 
 
@@ -1019,7 +1054,7 @@ coef_ci_sparse <- data.frame(
 ```
 
 
-There are four significant baseline predictors of abstinence: `ftcd_score`, `Var`, `hedonsum_y_pq1`, and `logNMR`. Varenicline treatment showed a strong positive association with abstinence (OR = 10.84, 95% CI: 1.22-4.11), with participants receiving varenicline having nearly 11 times higher odds of achieving abstinence compared to those receiving placebo, consistent with prior literature on varenicline's efficacy. Additionally, nicotine metabolism rate demonstrated a positive relationship with abstinence outcomes, with each unit increase in log(NMR) associated with 4.28 times higher odds of abstinence (95% CI: 0.63-2.09). That `logNMR` predicts abstinence is also understandable. As noted above, `NMR` indicates faster or slower metabolism of nicotine. Among other potential explanations for this variable's predictive value, individuals with faster nicotine metabolism tend to experience more intense withdrawal symptoms [@liakoni2019effects], as well as greater physical dependence and reward [@sofuoglu2012rapid], presumably making abstinence more difficult. This finding regarding NMR is particularly noteworthy as it appears to diverge from some previous research suggesting faster metabolizers typically experience greater difficulty achieving cessation, though the relationship between metabolism and cessation outcomes is known to be complex and may be treatment-dependent.
+There are four significant baseline predictors of abstinence: `ftcd_score`, `Var`, `hedonsum_y_pq1`, and `logNMR`. Varenicline treatment showed a strong positive association with abstinence *TODO (OR = 10.84, 95% CI: 1.22-4.11)*, with participants receiving varenicline having nearly 11 times higher odds of achieving abstinence compared to those receiving placebo, consistent with prior literature on varenicline's efficacy. Additionally, nicotine metabolism rate demonstrated a positive relationship with abstinence outcomes, with each unit increase in log(NMR) associated with 4.28 times higher odds of abstinence *TODO (95% CI: 0.63-2.09)*. That `logNMR` predicts abstinence is also understandable. As noted above, `NMR` indicates faster or slower metabolism of nicotine. Among other potential explanations for this variable's predictive value, individuals with faster nicotine metabolism tend to experience more intense withdrawal symptoms [@liakoni2019effects], as well as greater physical dependence and reward [@sofuoglu2012rapid], presumably making abstinence more difficult. This finding regarding NMR is particularly noteworthy as it appears to diverge from some previous research suggesting faster metabolizers typically experience greater difficulty achieving cessation, though the relationship between metabolism and cessation outcomes is known to be complex and may be treatment-dependent.
 
 
 
@@ -1103,7 +1138,18 @@ table_data_significant %>%
 
 
 
-The polynomial variables are difficult to interpret in the same efficient manner as the continuous `logNMR` or binary `Var`, therefore we produce plots to enhance our understanding. The FTCD score (`ftcd_score`) and complementary reinforcer score (`hedonsum_y_pq1`) both demonstrated significant non-linear relationships with abstinence. As visualized in Figure 2, the relationship between FTCD score and abstinence probability follows a complex cubic pattern, with the highest probability of abstinence occurring at low levels of dependence and decreasing non-linearly as the score increases. Similarly, `hedonsum_y_pq1` exhibited a non-linear relationship with abstinence (Figure 3), where the probability of abstinence decreased more steeply at higher levels of complementary reinforcement. As discussed in greater detail above, a higher score for complementary reinforcers denotes greater frequency of and/or more enjoyment of activities associated by the participant with smoking. It makes intuitive sense that, as our results suggest, participants whose more frequent and/or more enjoyable pleasurable events with smoking would have a harder time quitting. For one thing, engaging in those frequent, pleasurable, and smoking-associated activities would likely lead them to wish to smoke.  Moreover, they might have fewer opportunities to engage in  pleasurable activities not associated with smoking, undermining their ability to find alternative sources of reward. These findings suggest that both nicotine dependence and the degree to which participants associate pleasurable activities with smoking have complex, rather than straightforward linear, relationships with abstention.
+The polynomial variables are difficult to interpret in the same efficient manner as the continuous `logNMR` or binary `Var`, therefore we produce plots to enhance our understanding. The FTCD score (`ftcd_score`) and complementary reinforcer score (`hedonsum_y_pq1`) both demonstrated significant non-linear relationships with abstinence. As visualized in Figure 3, the relationship between FTCD score and abstinence probability follows a complex cubic pattern, with the highest probability of abstinence occurring at low levels of dependence and decreasing non-linearly as the score increases. Similarly, `hedonsum_y_pq1` exhibited a non-linear relationship with abstinence (Figure 4), where the probability of abstinence decreased more steeply at higher levels of complementary reinforcement. These relationships between FTCD score or complementary reinforcement score and the outcome are produced while holding all other variables at zero (for numeric variables) or their reference level (for categorical variables). 
+
+:::{.content-hidden}
+*TODO*
+[x] Add sentence explaining how plots are produced w/r/t other covariates
+
+***Reflection***
+Whenever interpretations and particularly predictive plots are produced, it is important to note precisely how these are produced (such as the values or levels of other covariates used when predicting on new data).
+:::
+
+
+As discussed in greater detail above, a higher score for complementary reinforcers denotes greater frequency of and/or more enjoyment of activities associated by the participant with smoking. It makes intuitive sense that, as our results suggest, participants whose more frequent and/or more enjoyable pleasurable events with smoking would have a harder time quitting. For one thing, engaging in those frequent, pleasurable, and smoking-associated activities would likely lead them to wish to smoke.  Moreover, they might have fewer opportunities to engage in  pleasurable activities not associated with smoking, undermining their ability to find alternative sources of reward. These findings suggest that both nicotine dependence and the degree to which participants associate pleasurable activities with smoking have complex, rather than straightforward linear, relationships with abstention.
 
 
 \btwocol
@@ -1229,7 +1275,6 @@ print(hedon_plot)
 
 ### Diagnostics
 
-The model's discriminative ability was assessed using ROC curves and calibration plots (Figures 4 and 5). The Lasso model demonstrated good discriminative performance with an AUC of 0.78 on the validation set, though some overfitting is suggested by the higher training AUC of 0.85. The calibration plot reveals generally good agreement between predicted and observed probabilities at lower ranges, but shows increasing uncertainty at higher probability ranges, as evidenced by the widening confidence bands around the Loess curve. This pattern is not unexpected given the class imbalance in our data. The overall calibration suggests the model provides reasonably reliable probability estimates, especially in the more commonly observed lower probability ranges.
 
 \btwocol
 
@@ -1383,6 +1428,7 @@ ggplot(test_calib) +
 \etwocol
 
 
+The model's discriminative ability was assessed using ROC curves and calibration plots (Figures 4 and 5). The Lasso model demonstrated good discriminative performance with an AUC of *TODO XXX* on the validation set, though some overfitting is suggested by the higher training AUC of *TODO XXX*. The calibration plot reveals generally good agreement between predicted and observed probabilities at lower ranges, but shows increasing uncertainty at higher probability ranges, as evidenced by the widening confidence bands around the Loess curve. This pattern is not unexpected given the class imbalance in our data. The overall calibration suggests the model provides reasonably reliable probability estimates, especially in the more commonly observed lower probability ranges.
 
 
 
@@ -1391,7 +1437,9 @@ ggplot(test_calib) +
 
 Results are presented for bootstrapped Lasso regression on the outcome abstinence, with main effects included and unpenalized. Interactions of baseline covariates with `BA` are included and penalized, allowing the Lasso to select the interaction terms of consequence. Only coefficients with confidence intervals not containing zero are presented in the table of results (noted as significant).
 
-Our moderator analysis revealed that anhedonia `shaps_score_pq1` significantly moderated the effect of `BA` treatment on abstinence outcomes (Table 3). This relationship was markedly non-linear, as visualized in Figure 6. The diverging curves for standard treatment versus BA demonstrate that the effect of BA on abstinence varies substantially based on baseline anhedonia levels. For participants with higher SHAPS scores (indicating higher anhedonia), BA and standard treatment showed similar effectiveness. However, as baseline anhedonia decreased, BA demonstrated increasingly superior outcomes compared to standard treatment, suggesting that BA may be particularly beneficial for individuals experiencing lower levels of anhedonia. This finding is somewhat paradoxical given BA's proposed mechanism of action in increasing reward experience and decreasing avoidance-based coping. We might expect those with higher anhedonia to do better with BA, but we observe the opposite. The model also confirmed the robust effect of varenicline (OR = 816.00, 95% CI: 3.22-15.39), though the wide confidence interval suggests considerable uncertainty in the effect size estimate.
+*Our moderator analysis revealed that anhedonia `shaps_score_pq1` significantly moderated the effect of `BA` treatment on abstinence outcomes *TODO (Table 3)*. This relationship was markedly non-linear, as visualized in *TODO Figure 6*. The diverging curves for standard treatment versus BA demonstrate that the effect of BA on abstinence varies substantially based on baseline anhedonia levels. For participants with higher SHAPS scores (indicating higher anhedonia), BA and standard treatment showed similar effectiveness. However, as baseline anhedonia decreased, BA demonstrated increasingly superior outcomes compared to standard treatment, suggesting that BA may be particularly beneficial for individuals experiencing lower levels of anhedonia. This finding is somewhat paradoxical given BA's proposed mechanism of action in increasing reward experience and decreasing avoidance-based coping. We might expect those with higher anhedonia to do better with BA, but we observe the opposite.* 
+
+The model also confirmed the robust effect of varenicline (OR = 816.00, 95% CI: 3.22-15.39), though the wide confidence interval suggests considerable uncertainty in the effect size estimate.
 
 
 
@@ -1951,7 +1999,7 @@ print(shaps_plot)
 
 ### Diagnostics
 
-The diagnostic plots for the moderator analysis (Figures 7 and 8) suggest more modest model performance compared to our main effects model. The ROC curves show fair discriminative ability with an AUC of 0.59 on the validation set and 0.67 on the training set. This decreased performance relative to our previous model likely reflects the increased complexity introduced by interaction terms and the inherent difficulty in predicting treatment effect heterogeneity especially in small samples. The calibration plot reveals substantial deviation from the ideal diagonal, with the model showing a tendency toward over-optimistic predictions in the mid-range probabilities and under-prediction at higher probabilities. The wide confidence bands around the Loess curve indicate considerable uncertainty in these predictions. These diagnostics suggest that while the model successfully identified a meaningful treatment-moderator interaction with anhedonia, its overall predictive accuracy is limited and its probability estimates should be interpreted with caution.
+
 
 \btwocol
 
@@ -2104,13 +2152,14 @@ ggplot(test_calib) +
 
 \etwocol
 
+*TODO The diagnostic plots for the moderator analysis (Figures 7 and 8) suggest more modest model performance compared to our main effects model. The ROC curves show fair discriminative ability with an AUC of 0.59 on the validation set and 0.67 on the training set. This decreased performance relative to our previous model likely reflects the increased complexity introduced by interaction terms and the inherent difficulty in predicting treatment effect heterogeneity especially in small samples. The calibration plot reveals substantial deviation from the ideal diagonal, with the model showing a tendency toward over-optimistic predictions in the mid-range probabilities and under-prediction at higher probabilities. The wide confidence bands around the Loess curve indicate considerable uncertainty in these predictions. These diagnostics suggest that while the model successfully identified a meaningful treatment-moderator interaction with anhedonia, its overall predictive accuracy is limited and its probability estimates should be interpreted with caution.*
 
 
 # Conclusion
 
-In this reanalysis of the BASC-Varenicline trial data, we identified several important predictors of smoking cessation success among individuals with current or past MDD. Our primary analysis confirmed varenicline's strong positive effect on abstinence and revealed complex non-linear relationships between cessation success and baseline characteristics including nicotine dependence (FTCD score) and complementary reinforcement. Notably, higher nicotine metabolism rates were associated with improved cessation outcomes, a finding that warrants further investigation given its divergence from some previous research. Our moderator analysis yielded a particularly valuable clinical insight: the effectiveness of Behavioral Activation treatment varied significantly with baseline anhedonia levels, with BA showing superior outcomes for participants experiencing lower levels of anhedonia.
+In this reanalysis of the BASC-Varenicline trial data, we identified several important predictors of smoking cessation success among individuals with current or past MDD. Our primary analysis confirmed varenicline's strong positive effect on abstinence and revealed complex non-linear relationships between cessation success and baseline characteristics including nicotine dependence (FTCD score) and complementary reinforcement. Notably, higher nicotine metabolism rates were associated with improved cessation outcomes, a finding that warrants further investigation given its divergence from some previous research. 
 
-Several limitations of our analysis warrant discussion. First, our analytical approach was constrained by sample size limitations, which led to the exclusion of Hispanic ethnicity data due to insufficient representation (n=18) and necessitated the grouping of educational and income categories to ensure model convergence. Second, the class imbalance in our outcome (21.33% abstinent) posed challenges for model fitting and likely contributed to the decreased accuracy of predictions at higher probability ranges, particularly in our moderator analysis. Third, convergence issues stemming from our relatively small sample size and numerous dichotomous variables limited our ability to employ more sophisticated regularization approaches. Finally, given more time larger bootstrap runs would be welcome. Future analyses with larger samples might benefit from exploring alternative methods such as L0 best subset selection, L0+L2 regularization, relaxed Lasso, or group Lasso, which could potentially offer improved variable selection and prediction accuracy.
+Several limitations of our analysis warrant discussion. First, our analytical approach was constrained by sample size limitations, which led to the exclusion of Hispanic ethnicity data due to insufficient representation (n=18) and necessitated the grouping of educational and income categories to ensure model convergence. Second, the class imbalance in our outcome (21.33% abstinent) posed challenges for model fitting and likely contributed to the decreased accuracy of predictions at higher probability ranges, particularly in our moderator analysis. Third, convergence issues stemming from our relatively small sample size and numerous dichotomous variables limited our ability to employ more sophisticated regularization approaches. Finally, despite doing 6,000 bootstrap iterations, if given more time larger bootstrap runs would be welcome. Future analyses with larger samples might benefit from exploring alternative methods such as L0 best subset selection, L0+L2 regularization, relaxed Lasso, group Lasso, or hierarchical Lasso, which could potentially offer improved variable selection and prediction accuracy.
 
 Despite these limitations, our findings suggest that baseline characteristics, particularly anhedonia levels, could inform the personalization of smoking cessation treatments for individuals with current or past MDD. The identified moderating effect of anhedonia on BA treatment efficacy may be valuable for clinical decision-making, though the modest predictive performance of our moderator model suggests that additional research is needed to validate and refine these findings.
 
