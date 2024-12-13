@@ -1,7 +1,7 @@
 ---
 title: \small \vspace{-.5cm} Variable Selection and Regression Analysis of Smoking Cessation Outcomes Using Regularization$\colon$
 subtitle: \small \vspace{-.1cm} A Reanalysis of the BASC-Varenicline Trial Data
-#author: \small Tom Arnold
+author: \small \vspace{-.3cm} Thomas B. Arnold
 #date: today
 #date-format: long
 format:
@@ -42,6 +42,9 @@ editor_options:
 #   mice 3.16.0
 #   caret 6.0-94
 #   pROC 1.18.4
+#   gt 0.9.0
+#   gtsummary 1.7.2
+#   glue
 
 
 setwd("~/GitHub/smoking_cessation_proj")
@@ -70,10 +73,9 @@ library(glmnet)
 library(mice)
 library(caret)
 library(pROC)
-
-#library(Hmisc)
-#library(vcd)
-
+library(gtsummary)
+library(gt)
+library(glue)
 
 source("_helpers.R")
 
@@ -83,7 +85,7 @@ source("_helpers.R")
 ::: {.content-hidden}
 Note: "vspace" below reduces space between title and first paragraph. 
 :::
-\vspace{-3cm} 
+\vspace{-2cm} 
 
 # Abstract
 
@@ -152,7 +154,7 @@ Substitute and complimentary reinforcer scores (`hedonsum_n_pq1` and `hedonsum_y
 
 Anhedonia (`shaps_score_pq1`) is assessed with the 14-item Snaith-Hamilton Pleasure Scale (SHAPS), where 14 statements are ranked on a 4-point Likert scale, with higher scores indicating greater enjoyment of typically rewarding experiences [@snaith1995scale].
 
-Nicotine metabolism ratio, otherwise known as nicotine metabolite ratio (`NMR`), is calculated as the ratio of 3'hydroxycotinine [3HC] to cotinine; `NMR` is a biomarker where higher `NMR` is associated with faster metabolism of nicotine [@siegel2020use]. 
+Nicotine metabolism ratio, otherwise known as nicotine metabolite ratio (`NMR`), is calculated as the ratio of 3'hydroxycotinine (3HC) to cotinine; `NMR` is a biomarker where higher `NMR` is associated with faster metabolism of nicotine [@siegel2020use]. 
 
 
 ## Exploratory Data Analysis 
@@ -232,12 +234,129 @@ data <- data %>%
 
 
 
-   
-
-
-
-```{r}
+```{r, eval=T}
 #| label: tbl-1
+#| tbl-cap: "Summary of Variables" 
+
+df_tbl <- data %>%
+  mutate(
+    treatment_arm = case_when(
+      Var == "Placebo" & BA == "Standard" ~ "ST + placebo",
+      Var == "Placebo" & BA == "BA" ~ "BASC + placebo",
+      Var == "Varenicline" & BA == "Standard" ~ "ST + varenicline",
+      Var == "Varenicline" & BA == "BA" ~ "BASC + varenicline"
+    )
+  )
+
+# gtsummary table
+tbl <- df_tbl %>%
+  select(
+    treatment_arm,
+    age_ps,
+    sex_ps,
+    NHW,
+    Black,
+    Hisp,
+    inc,
+    edu,
+    ftcd_score,
+    ftcd.5.mins,
+    readiness,
+    cpd_ps,
+    crv_total_pq1,
+    hedonsum_n_pq1,
+    hedonsum_y_pq1,
+    otherdiag,
+    antidepmed,
+    mde_curr,
+    NMR,
+    Only.Menthol
+  ) %>%
+  tbl_summary(
+    by = treatment_arm,
+    missing = "no",
+    type = list(readiness ~ "continuous"),  
+    statistic = list(
+      all_continuous() ~ "{mean} ({sd})",
+      all_categorical() ~ "{n} ({p}%)"
+    ),
+    digits = list(
+      all_continuous() ~ 1,
+      all_categorical() ~ 1
+    )
+  ) %>%
+  add_overall() %>%
+  # Note: the nice header work here doesn't work because we are forced to use
+  # as_kable for rendering so we can control the width
+  #modify_header(label = "**Characteristic**") %>%
+  modify_header(label = "Characteristic") %>%
+  #modify_spanning_header(all_stat_cols() ~ "**Treatment Arm**")  %>%
+  modify_header( # To match paper columns
+    all_stat_cols() ~ paste0(
+      #"**{level}**\n",
+      "{level}      ",
+      "n = {n}"
+    )
+  ) 
+
+tbl <- tbl %>% as_kable(
+  booktabs = T,
+  longtable = T,
+  escape = T,
+  align = c('l','c','c','c','c','c')) %>%
+  column_spec(1, width="4cm", latex_valign = "m") %>%
+  column_spec(2, width="2cm", latex_valign = "m") %>%
+  column_spec(3, width="2cm", latex_valign = "m") %>%
+  column_spec(4, width="2cm", latex_valign = "m") %>%
+  column_spec(5, width="2cm", latex_valign = "m") %>%
+  column_spec(6, width="2cm", latex_valign = "m") %>%
+  kable_styling(
+    font_size = 8, 
+    latex_options = c(
+    "repeat_header",
+    'striped'), 
+    full_width = F, 
+    position = 'center'
+  ) %>%
+  footnote(general = "Mean (SD); n (%)", escape = T)
+
+  
+
+# tbl <- tbl %>%
+#   as_gt() %>% 
+#   # cols_width( # Note: neither cols_width nore table.width work currently. cols_width
+#   #             # works in gt tables but not gtsummary tables. table.width doesn't work
+#   #             # for any LaTex/PDF Quarto docs. (12/13/24)
+#   #   variable ~ "50pt",
+#   #   var_type ~ "50pt",
+#   #   var_label ~ "50pt",
+#   #   row_type ~ "50pt",
+#   #   label ~ "50pt",
+#   #   stat_0 ~ "50pt",
+#   #   stat_1 ~ "50pt",
+#   #   stat_2 ~ "50pt",
+#   #   stat_3 ~ "50pt",
+#   #   stat_4 ~ "50pt"
+#   #   #`**Characteristic**` ~ "50pt" # Not an actual column, just a label
+#   #   #starts_with("var") ~ "100pt"
+#   #   #variable ~ px(100) # LaTeX doesn't like px()
+#   # ) %>%
+# #  tab_options(
+# #    #table.font.size = "small" # Note: Doesn't currently work in PDF/LaTeX
+# #    #table.width = "500pt" # Note: Doesn't currently work in PDF/LaTeX
+# #  ) %>%
+#   as_latex()  
+# 
+
+
+tbl
+
+```
+   
+\vspace{-1cm}
+
+```{r, eval=FALSE}
+#| label: tbl-1_old
 #| tbl-cap: "Summary of Variables" 
 # Note: using tbl-cap rather than caption= in kbl() breaks repeated title is span page
 
