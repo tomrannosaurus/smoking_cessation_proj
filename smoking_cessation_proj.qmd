@@ -111,8 +111,15 @@ The data in our study is derived from a recent randomized, placebo-controlled tr
 
 The Hitsman study from which we draw our data uses a 2x2 factorial design, with 300 participants with past or present MDD treated, over 12 weeks, with BASC or ST alongside placebo or varenciline. Although the Hitsman study found that BASC did not outperform ST with respect to abstinence at 27 weeks, with or without varenicline, it did find that varenicline improved short- and longer-term abstinence compared to placebo [@hitsman2023efficacy]. The dual goals of our analysis of the @hitsman2023efficacy data will be to assess whether and how baseline variables (1) moderate behavioral treatment's effect on end-of-treatment (EOT) abstinence and (2) predict EOT abstinence, controlling for pharmaceutical and behavioral treatments.
 
-In order to accomplish these dual goals, we use regularized linear models. Regularization, also known as shrinkage, reduces variance by fitting a model with all $p$ predictors, with the estimated coefficients shrunken towards zero relative to the least square estimates [@hastie2009introduction; pp. 204]. We use this technique here because our goal can be understood as a variable selection problem. The Lasso method of regularization, which comepls some of the coefficients to be exactly equal to zero, can also be used for variable selection [@hastie2009introduction; pp. 204, 219]. Best subset regression seeks the optimal subset of predictors by evaluating all possible combinations, thereby ensuring selection of the model with the lowest prediction error, although at a computational cost that increases exponentially with the number of predictors [@hazimeh2020fast; @hastie2015statistical]. In contrast, L0+L2 regularization combines the sparsity-promoting L0 penalty, which counts the number of non-zero coefficients, with the L2 penalty that shrinks coefficients towards zero without zeroing them, effectively balancing variable selection with the need to manage multicollinearity and enhance model accuracy [@hazimeh2020fast; @hastie2015statistical; @paul2550presentation]. The relaxed lasso, a modification of the Lasso method, initially applies the Lasso to determine a subset of variables by shrinking some coefficients to zero, then refits these selected variables with a reduced or absent Lasso penalty, potentially reducing bias while retaining the variable selection advantage of the original Lasso approach [@meinshausen2007relaxed]. L0+L2 and relaxed Lasso are considered the best trade-offs between variable selection and goodness of fit [@paul2550presentation]. Best subset, L0+L2, and relaxed Lasso are more computationally difficult than standard lasso. 
+In order to accomplish these dual goals, we use regularized linear models. Regularization, also known as shrinkage, reduces variance by fitting a model with all $p$ predictors, with the estimated coefficients shrunken towards zero relative to the least square estimates (@hastie2009introduction; pp. 204). We use this technique here because our goal can be understood as a variable selection problem. The Lasso method of regularization, which comepls some of the coefficients to be exactly equal to zero, can also be used for variable selection [@hastie2009introduction; pp. 204, 219]. Best subset regression seeks the optimal subset of predictors by evaluating all possible combinations, thereby ensuring selection of the model with the lowest prediction error, although at a computational cost that increases exponentially with the number of predictors [@hazimeh2020fast; @hastie2015statistical]. In contrast, L0+L2 regularization combines the sparsity-promoting L0 penalty, which counts the number of non-zero coefficients, with the L2 penalty that shrinks coefficients towards zero without zeroing them, effectively balancing variable selection with the need to manage multicollinearity and enhance model accuracy [@hazimeh2020fast; @hastie2015statistical; @paul2550presentation]. The relaxed lasso, a modification of the Lasso method, initially applies the Lasso to determine a subset of variables by shrinking some coefficients to zero, then refits these selected variables with a reduced or absent Lasso penalty, potentially reducing bias while retaining the variable selection advantage of the original Lasso approach [@meinshausen2007relaxed]. L0+L2 and relaxed Lasso are considered the best trade-offs between variable selection and goodness of fit [@paul2550presentation; hazimeh2020fast]. Best subset, L0+L2, and relaxed Lasso are more computationally difficult than standard lasso. 
 
+:::{.content-hidden}
+*TODO*
+[] Add note in paragraph above that makes it clear that we only use L2 regularization in this paper
+
+***Reflection***
+TBD
+:::
 
 
 
@@ -125,6 +132,15 @@ In order to accomplish these dual goals, we use regularized linear models. Regul
 ## Variables
 
 First, we note that all covariates, other than abstinence (`abst`), are baseline variables. The following variables are binary: pharmacotherapy (`Var`); psychotherapy (`BA`); sex (`sex_ps`); indicators of whether the participant identifies as non-Hispanic white, Black, and/or Hispanic (`NHW`, `Black`, and `Hisp`); whether the individual smokes within five minutes of waking up (`ftcd.5.mins`); other lifetime DSM-5 diagnosis (`otherdiag`); whether the participant takes antidepressant medication (`antidepmed`); current or past MDD (`mde_curr`); and exclusive use of methylated cigarettes (`Only.Menthol`). The numeric variables are age (`age_ps`); cigarettes per day (`cpd_ps`); and Nicotine Metabolism Ratio (`NMR`). All remaining variables are ordinal. However, we treat income (`inc`) and education (`edu`) as ordinal, but (as we discuss below) treat the following variables as numeric: FTCD score (`ftcd_score`); `bdi_score_pq1`; cigarette reward value (`crv_total_pg1`); substitute reinforcer score (`hedonsum_n_pq1`); complementary reinforcer score (`hedonsum_y_pq1`); anhedonia (`shaps_score_pg1`); and readiness to quit smoking (`readiness`).
+
+:::{.content-hidden}
+*TODO*
+[] After paragraph above, replace variable names with their English counterparts (safe because we defined them clearly in paragraph above)
+
+***Reflection***
+Better readability is important for communicating work.
+:::
+
 
 The `ftcd_score` is the participant's score on the Fagerstrom Test for Cigarette Dependence, a six-item survey intended to evaluate the quantity of cigarette consumption, dependence, and compulsion to smoke; answers are scored and summed to yield a total score of 0-10, with higher scores indicating a greater physical dependence on nicotine [@fagerstrom2011determinants].
 
@@ -143,7 +159,7 @@ Nicotine metabolism ratio, otherwise known as nicotine metabolite ratio (`NMR`),
 
 The original paper uses a 2x2 factorial design. However, we choose to keep the treatment variables separate because the sample size is very small and further reducing the sample size to the four groups at issue would significantly limit the Lasso's ability to fit the data. That the 2x2 factorial design is not necessary to answer the research question validates our choice.
 
-In addition to summary statistics available in Table 1 and the correlation matrix, we also inspect univariate histograms (omitted for space) for all variables. Bivariate plots with the outcome are omitted because the outcome is binary. We note that there is still the assumption that there is a linear relationship between the log odds of predictors and the outcome. 
+In addition to summary statistics available in Table 1 and the correlation matrix, we also inspect univariate histograms (omitted for space) for all variables. Bivariate plots with the outcome are omitted because the outcome is binary.
 
 Additionally we examine the distribution and association of all variables between levels of `abst`, `BA`, and `Var` (tables omitted for space). When dividing the sample for each variable by `abst` we see that there is a significant difference between those who abstain and those who do no in the `Var`. This is because of the noted effectiveness of the treatment `Var`. We also observe marginal significance in the variable `ftcd_score` with abstainers having lower baseline scores. This could be a confounder, but makes logical sense as higher `ftcd_score` indicates greater dependency which would make it more difficult to abstain. There are no other significant differences in variables between groups of `abst`. Finally, when dividing the sample for each variable by `BA` we see that there are no significant differences in variables between groups of `BA`. Lastly, when dividing the sample for each variable by `Var` we see one significant difference in `abst`, essentially a mirror image of the difference discussed prior.
 
@@ -457,7 +473,7 @@ naniar::mcar_test(data)
 
 ### Modeling
 
-We use a Lasso model to answer both questions at issue. To evaluate baseline variables that predict `abst`, we construct a Lasso model that includes all main effects and polynomial terms for score variables. To evaluate baseline moderators of the effect of `BA` on `abst`, we also use a Lasso model, but the model that we use this time includes all main effects and polynomial terms of scores, as well as interactions of those terms with `BA`. 
+We use a Lasso model to answer both questions at issue. To evaluate baseline variables that predict `abst`, we construct a Lasso model that includes all main effects and polynomial terms for score variables. To evaluate baseline moderators of the effect of `BA` on `abst`, we also use a Lasso model, but the model that we use this time includes all main effects and polynomial terms of scores, as well as interactions of those terms with `BA`. We note that there is still the assumption that there is a linear relationship between the log odds of predictors and the outcome, but not an assumption of linearity between the predictors and the outcome itself. 
 
 We choose a Lasso model due to its constraints on potential values of the coefficients, introducing desirable bias to the model when performed correctly, which prevent overfitting. We choose not to use L0, L0+L2, or relaxed Lasso: while all three are computationally more difficult and would have more convergence issues than Lasso, the former two also have a harsher penalty [@hazimeh2020fast; @hastie2015statistical; @meinshausen2007relaxed].  
 
@@ -466,6 +482,7 @@ First, we perform an 80/20 validation training split, where each split has the s
 After the estimates are derived from the bootstrap procedure, we evaluate the model's performance using the validation data. We tested the model's performance using the pooled estimates on validation data in order to assess calibration and discrimination. For the former, we use calibration plots comparing the model's abstinence predictions to the study's actual results. For the latter, we use AUC and ROC to test whether the model could correctly identify participants who were or were not abstinent.
 
 For the main effects model, enforcement of additional sparsity beyond the Lasso's inherent variable selection was unnecessary, as the number of parameters relative to sample size did not suggest overfitting. However, the moderator model, which included interaction terms with BA treatment, presented a higher risk of overfitting due to the substantially increased number of parameters. Therefore, we implemented additional sparsity criteria for the moderator model: coefficients were retained in the final model only if they were consistently selected (non-zero) across a high proportion of bootstrap iterations (threshold = 0.90). This approach helps prevent overfitting by ensuring that selected moderators demonstrate robust relationships with the outcome across multiple bootstrap samples, rather than capturing spurious associations that might arise from the increased model complexity introduced by interaction terms.
+
 
 
 
@@ -492,7 +509,7 @@ data <- data %>%
          )
 
 data <- data %>%
-  mutate(logNMR = log(NMR)) %>%
+  mutate(logNMR = log(NMR)) %>% # Toggle off to test model fit w/o transform
   select(-c(NMR, Hisp, NHW))
 
 ```
@@ -523,10 +540,10 @@ Results are presented for bootstrapped Lasso regression on outcome abstinence, i
 ```{r main effects lasso w bootstrap}
 #GOOD; Q1; baseline
 # Def All Params
-B <- 200      # num of bootstraps 
+B <- 1000      # num of bootstraps 
 m <- 5       # num of multiple imputations per bootstrap
 k <- 5       # num of cv folds for cv.glmnet
-poly_degree <- 3  # degree for polynomial terms
+poly_degree <- 3  # degree for polynomial terms, set to 1 to test model fit w/o poly
 
 # remove id 
 data_complete <- data %>% select(-id) 
@@ -591,7 +608,7 @@ colnames(nonzero_matrix) <- master_coef_names
 
 ```
 
-```{r main effects coef lasso, eval = F}
+```{r main effects coef lasso, eval = T}
 
 # --- Main estimation and bootstrap loop ---
 
@@ -674,6 +691,19 @@ matched_primary <- names(primary_coef_values) %in% master_coef_names
 aligned_primary_coef[names(primary_coef_values)[matched_primary]] <- 
   primary_coef_values[matched_primary]
 
+
+
+
+primary_nonzero <- abs(aligned_primary_coef) > 1e-8  # New
+
+
+
+
+
+```
+
+```{r main effects bootstrap loop, eval = F}
+
 # --- Bootstrap loop for confidence intervals ---
 coef_matrix <- matrix(NA, nrow = B, ncol = length(master_coef_names))
 colnames(coef_matrix) <- master_coef_names
@@ -681,10 +711,6 @@ colnames(coef_matrix) <- master_coef_names
 nonzero_matrix <- matrix(0, nrow = B, ncol = length(master_coef_names))
 colnames(nonzero_matrix) <- master_coef_names
 
-
-```
-
-```{r main effects bootstrap loop, eval = F}
 set.seed(1)
 for (b in 1:B) {
   cat("Bootstrap iteration:", b, "of", B, "\n")
@@ -771,18 +797,19 @@ for (b in 1:B) {
 ```
 
 ```{r, eval = F}
-saveRDS(coef_matrix, file = "baseline_coef_CI-fix.rds")
-saveRDS(nonzero_matrix, file = "baseline_nonzero_CI-fix.rds")
+saveRDS(coef_matrix, file = "baseline_coef_CI-fix_1k.rds")
+saveRDS(nonzero_matrix, file = "baseline_nonzero_CI-fix_1k.rds")
 
 ```
 
 ```{r, eval = T}
-coef_matrix <- readRDS(file = "baseline_coef_CI-fix.rds")
-nonzero_matrix <- readRDS(file = "baseline_nonzero_CI-fix.rds")
+coef_matrix <- readRDS(file = "baseline_coef_CI-fix_1k.rds")
+nonzero_matrix <- readRDS(file = "baseline_nonzero_CI-fix_1k.rds")
 
 ```
 
 ```{r}
+coef_matrix[, !primary_nonzero] <- 0
 
 # --- Pool coefs ---
 
@@ -810,24 +837,30 @@ coef_ci <- data.frame(
   Proportion_Nonzero = proportion_nonzero
 )
 
+coef_ci$Primary_Estimate <- aligned_primary_coef
 
 
 
 ```
 
-```{r, eval = F}
+```{r, fig.cap="Bootstrap Confidence Intervals for Lasso Coefficients", fig.height=5, fig.width=9, eval = T}
 # plot the CIs
-ggplot(coef_ci, aes(x = Predictor, y = Median)) +
+ggplot(coef_ci[-1,], aes(x = Predictor, y = Median)) +
   geom_point() +
+  geom_point(aes(y=Primary_Estimate), color = "red") +
   geom_errorbar(aes(ymin = Lower_2.5, ymax = Upper_97.5), width = 0.2) +
+  coord_flip() +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   labs(
-    title = "Bootstrap Confidence Intervals for Lasso Coefficients",
     y = "Coefficient Estimate",
     x = "Predictors"
   )
 
+```
+
+
+```{r, eval = F}
 # plot nonzero prop 
 ggplot(coef_ci, aes(x = Predictor, y = Proportion_Nonzero)) +
   geom_bar(stat = "identity", fill = "skyblue") +
@@ -845,30 +878,9 @@ ggplot(coef_ci, aes(x = Predictor, y = Proportion_Nonzero)) +
 
 
 ```{r}
-# --- Enforce Sparsity ---
+# --- Placeholder for: Enforce Sparsity (not done for main effects model) ---
 
-# first criteria
-threshold <- .90 # make this dynamic later
-predictors_to_keep <- names(proportion_nonzero)[proportion_nonzero >= threshold]
 coef_matrix_sparse <- coef_matrix
-
-# columns (predictors) to zero out
-predictors_to_zero <- setdiff(colnames(coef_matrix_sparse), predictors_to_keep)
-
-# second criteria
-zero_ci_predictors <- coef_ci$Predictor[
-  round(coef_ci$Median, 4) == 0 &
-  round(coef_ci$Lower_2.5, 4) == 0 &
-  round(coef_ci$Upper_97.5, 4) == 0]
-
-predictors_to_zero <- union(predictors_to_zero, zero_ci_predictors)
-
-# zero out the coefs 
-if(length(predictors_to_zero) > 0){
-  coef_matrix_sparse[, predictors_to_zero] <- 0
-}
-
-
 
 coef_mean <- colMeans(coef_matrix_sparse, na.rm = TRUE)
 coef_median <- apply(coef_matrix_sparse, 2, median, na.rm = TRUE)
@@ -966,11 +978,9 @@ table_data_significant %>%
 
 The polynomial variables are difficult to interpret in the same efficient manner as the continuous `logNMR` or binary `Var`, therefore we produce plots to enhance our understanding. The FTCD score (`ftcd_score`) and complementary reinforcer score (`hedonsum_y_pq1`) both demonstrated significant non-linear relationships with abstinence. As visualized in Figure 2, the relationship between FTCD score and abstinence probability follows a complex cubic pattern, with the highest probability of abstinence occurring at low levels of dependence and decreasing non-linearly as the score increases. Similarly, `hedonsum_y_pq1` exhibited a non-linear relationship with abstinence (Figure 3), where the probability of abstinence decreased more steeply at higher levels of complementary reinforcement. As discussed in greater detail above, a higher score for complementary reinforcers denotes greater frequency of and/or more enjoyment of activities associated by the participant with smoking. It makes intuitive sense that, as our results suggest, participants whose more frequent and/or more enjoyable pleasurable events with smoking would have a harder time quitting. For one thing, engaging in those frequent, pleasurable, and smoking-associated activities would likely lead them to wish to smoke.  Moreover, they might have fewer opportunities to engage in  pleasurable activities not associated with smoking, undermining their ability to find alternative sources of reward. These findings suggest that both nicotine dependence and the degree to which participants associate pleasurable activities with smoking have complex, rather than straightforward linear, relationships with abstention.
 
-\newpage
 
-\btwocol
 
-```{r, fig.cap="Relationship between FTCD Score and Estimates"}
+```{r, fig.height=2.4, fig.width=6.5, fig.cap="Relationship between FTCD Score and Estimates"}
 
 # FTCD
 
@@ -1000,7 +1010,8 @@ plot_data <- data.frame(
 # plot log odds
 p1 <- ggplot(plot_data, aes(x = ftcd_score, y = log_odds)) +
   geom_line() +
-  theme_minimal() +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   labs(x = "FTCD Score", 
        y = "Predicted Log Odds",
        title = "")
@@ -1008,7 +1019,8 @@ p1 <- ggplot(plot_data, aes(x = ftcd_score, y = log_odds)) +
 # plot probabilities
 p2 <- ggplot(plot_data, aes(x = ftcd_score, y = probability)) +
   geom_line() +
-  theme_minimal() +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   labs(x = "FTCD Score", 
        y = "Predicted Probability",
        title = "")
@@ -1027,7 +1039,10 @@ print(ftcd_plot)
 
 
 
-```{r, fig.cap="Relationship between Hedonsum Score and Estimates"}
+```{r, fig.cap="Relationship between Hedonsum Score and Estimates", eval=F}
+### Plot omitted in revision as this is no longer significant
+
+
 # Hedonsum
 hedon_coefs <- coef_ci[grep("poly\\(hedonsum_y_pq1, 3, raw = TRUE\\)", coef_ci$Predictor), ]
 hedon_range <- seq(min(na.omit(data$hedonsum_y_pq1)),
@@ -1072,8 +1087,6 @@ hedon_plot <- ggarrange(
 )
 print(hedon_plot)
 ```
-
-\etwocol
 
 
 
@@ -1231,7 +1244,7 @@ ggplot(test_calib) +
   labs(x = "Expected Proportion",
        y = "Observed Proportion",
        title="") +
-  theme_minimal()
+  theme_bw()
 ```
 
 
@@ -1251,12 +1264,12 @@ Our moderator analysis revealed that anhedonia `shaps_score_pq1` significantly m
 
 
 ```{r interactions lasso w bootstrap}
-#GOOD; Q2; Moderator (INTERACTION MODEL TO BE UPDATED)
+#GOOD; Q2; Moderator 
 # Def All Params
-B <- 200      # num of bootstraps
+B <- 1000      # num of bootstraps
 m <- 5       # num of multiple imputations per bootstrap
 k <- 5       # num of cv folds for cv.glmnet
-poly_degree <- 3  # degree for polynomial terms
+poly_degree <- 3  # degree for polynomial terms, set to 1 to test model fit w/o poly
 
 # remove id 
 data_complete <- data %>% select(-id) 
@@ -1316,7 +1329,7 @@ total_coeffs <- length(master_coef_names)
 
 ```
 
-```{r interactions coef lasso, eval = F}
+```{r interactions coef lasso, eval = T}
 
 # --- Main estimation and bootstrap loop ---
 
@@ -1410,6 +1423,14 @@ matched_primary <- names(primary_coef_values) %in% master_coef_names
 aligned_primary_coef[names(primary_coef_values)[matched_primary]] <- 
   primary_coef_values[matched_primary]
 
+
+
+primary_nonzero <- abs(aligned_primary_coef) > 1e-8  # New
+
+```
+
+```{r interactions bootstrap loop, eval = F}
+
 # --- Bootstrap loop for confidence intervals ---
 coef_matrix <- matrix(NA, nrow = B, ncol = length(master_coef_names))
 colnames(coef_matrix) <- master_coef_names
@@ -1417,9 +1438,7 @@ colnames(coef_matrix) <- master_coef_names
 nonzero_matrix <- matrix(0, nrow = B, ncol = length(master_coef_names))
 colnames(nonzero_matrix) <- master_coef_names
 
-```
 
-```{r interactions bootstrap loop, eval = F}
 set.seed(1)
 for (b in 1:B) {
   cat("Bootstrap iteration:", b, "of", B, "\n")
@@ -1516,18 +1535,19 @@ for (b in 1:B) {
 ```
 
 ```{r, eval = F}
-saveRDS(coef_matrix, file = "moderators_coef_CI-fix.rds")
-saveRDS(nonzero_matrix, file = "moderators_nonzero_CI-fix.rds")
+saveRDS(coef_matrix, file = "moderators_coef_CI-fix_1k.rds")
+saveRDS(nonzero_matrix, file = "moderators_nonzero_CI-fix_1k.rds")
 
 ```
 
 ```{r, eval = T}
-coef_matrix <- readRDS(file = "moderators_coef_CI-fix.rds")
-nonzero_matrix <- readRDS(file = "moderators_nonzero_CI-fix.rds")
+coef_matrix <- readRDS(file = "moderators_coef_CI-fix_1k.rds")
+nonzero_matrix <- readRDS(file = "moderators_nonzero_CI-fix_1k.rds")
 
 ```
 
 ```{r}
+coef_matrix[, !primary_nonzero] <- 0
 
 # --- Pool coefs ---
 
@@ -1708,7 +1728,9 @@ table_data_significant %>%
 
 
 
-```{r, fig.cap="Relationship between SHAPS Score and Estimates"}
+```{r, fig.cap="Relationship between SHAPS Score and Estimates", eval = F}
+### Plot omitted in revision as this is no longer significant
+
 # polynomial coefficients
 shaps_coefs <- coef_ci[grep("poly\\(shaps_score_pq1, 3, raw = TRUE\\)", coef_ci$Predictor), ]
 # interaction coefficients
@@ -1923,7 +1945,7 @@ ggplot(test_calib) +
   labs(x = "Expected Proportion",
        y = "Observed Proportion",
        title="") +
-  theme_minimal()
+  theme_bw()
 
 ```
 
