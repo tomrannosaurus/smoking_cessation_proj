@@ -848,7 +848,7 @@ ggplot(coef_ci, aes(x = Predictor, y = Proportion_Nonzero)) +
 # --- Enforce Sparsity ---
 
 # first criteria
-threshold <- .85 # make this dynamic later
+threshold <- .90 # make this dynamic later
 predictors_to_keep <- names(proportion_nonzero)[proportion_nonzero >= threshold]
 coef_matrix_sparse <- coef_matrix
 
@@ -868,7 +868,6 @@ if(length(predictors_to_zero) > 0){
   coef_matrix_sparse[, predictors_to_zero] <- 0
 }
 
-coef_matrix_sparse <- coef_matrix
 
 
 coef_mean <- colMeans(coef_matrix_sparse, na.rm = TRUE)
