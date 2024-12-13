@@ -916,14 +916,14 @@ for (b in 1:B) {
 ```
 
 ```{r, eval = F}
-saveRDS(coef_matrix, file = "baseline_coef_CI-fix_1k.rds")
-saveRDS(nonzero_matrix, file = "baseline_nonzero_CI-fix_1k.rds")
+saveRDS(coef_matrix, file = "baseline_coef_CI-fix_6k.rds")
+saveRDS(nonzero_matrix, file = "baseline_nonzero_CI-fix_6k.rds")
 
 ```
 
 ```{r, eval = T}
-coef_matrix <- readRDS(file = "baseline_coef_CI-fix_1k.rds")
-nonzero_matrix <- readRDS(file = "baseline_nonzero_CI-fix_1k.rds")
+coef_matrix <- readRDS(file = "baseline_coef_CI-fix_6k.rds")
+nonzero_matrix <- readRDS(file = "baseline_nonzero_CI-fix_6k.rds")
 
 ```
 
@@ -1009,6 +1009,7 @@ proportion_nonzero <- colSums(nonzero_matrix, na.rm = TRUE) / sum(nonzero_matrix
 
 coef_ci_sparse <- data.frame(
   Predictor = colnames(coef_matrix_sparse),
+  Primary_Estimate = aligned_primary_coef,
   Mean = coef_mean,
   Median = coef_median,
   Lower_2.5 = coef_lower,
@@ -1028,7 +1029,8 @@ There are four significant baseline predictors of abstinence: `ftcd_score`, `Var
 
 coef_ci_sparse <- coef_ci_sparse %>%
   mutate(
-    Odds_Ratio = exp(Median)  # Odds Ratio
+    #Odds_Ratio = exp(Median)  # Odds Ratio
+    Odds_Ratio = exp(Primary_Estimate)  # Odds Ratio (now using main lasso est.)
   )
 
 coef_ci_sparse <- coef_ci_sparse %>%
@@ -1048,6 +1050,8 @@ coef_ci_sparse <- coef_ci_sparse %>%
 table_data <- coef_ci_sparse %>%
   select(
     Predictor,
+    Primary_Estimate,
+    Mean,
     Median,
     Odds_Ratio,
     Lower_2.5,
@@ -1056,6 +1060,8 @@ table_data <- coef_ci_sparse %>%
     Significant
   ) %>%
   rename(
+    "Estimate (Primary)" = Primary_Estimate,
+    "Estimate (Mean)" = Mean,
     "Estimate (Median)" = Median,
     "Odds Ratio" = Odds_Ratio,
     "Lower 2.5%" = Lower_2.5,
@@ -1077,13 +1083,15 @@ table_data_significant %>%
     digits = 3,               
     caption = "Lasso Regression Coefficient Estimates"  
   ) %>%
-  column_spec(1, width = "4cm", latex_valign = "m") %>%  
-  column_spec(2, width = "2cm", latex_valign = "m") %>%   
-  column_spec(3, width = "2cm", latex_valign = "m") %>%   
-  column_spec(4, width = "2cm", latex_valign = "m") %>%   
-  column_spec(5, width = "2cm", latex_valign = "m") %>%   
-  column_spec(6, width = "2cm", latex_valign = "m") %>%    
-  column_spec(7, width = ".5cm", latex_valign = "m") %>%   
+  column_spec(1, width = "3.2cm", latex_valign = "m") %>%  
+  column_spec(2, width = "1.5cm", latex_valign = "m") %>%   
+  column_spec(3, width = "1.5cm", latex_valign = "m") %>%   
+  column_spec(4, width = "1.5cm", latex_valign = "m") %>%   
+  column_spec(5, width = "1.5cm", latex_valign = "m") %>%   
+  column_spec(6, width = "1.5cm", latex_valign = "m") %>%   
+  column_spec(7, width = "1.5cm", latex_valign = "m") %>%   
+  column_spec(8, width = "1.5cm", latex_valign = "m") %>%    
+  column_spec(9, width = ".5cm", latex_valign = "m") %>%   
   kable_styling(
     font_size = 7.6,                                     
     latex_options = c("repeat_header", "striped"),      
@@ -1098,8 +1106,9 @@ table_data_significant %>%
 The polynomial variables are difficult to interpret in the same efficient manner as the continuous `logNMR` or binary `Var`, therefore we produce plots to enhance our understanding. The FTCD score (`ftcd_score`) and complementary reinforcer score (`hedonsum_y_pq1`) both demonstrated significant non-linear relationships with abstinence. As visualized in Figure 2, the relationship between FTCD score and abstinence probability follows a complex cubic pattern, with the highest probability of abstinence occurring at low levels of dependence and decreasing non-linearly as the score increases. Similarly, `hedonsum_y_pq1` exhibited a non-linear relationship with abstinence (Figure 3), where the probability of abstinence decreased more steeply at higher levels of complementary reinforcement. As discussed in greater detail above, a higher score for complementary reinforcers denotes greater frequency of and/or more enjoyment of activities associated by the participant with smoking. It makes intuitive sense that, as our results suggest, participants whose more frequent and/or more enjoyable pleasurable events with smoking would have a harder time quitting. For one thing, engaging in those frequent, pleasurable, and smoking-associated activities would likely lead them to wish to smoke.  Moreover, they might have fewer opportunities to engage in  pleasurable activities not associated with smoking, undermining their ability to find alternative sources of reward. These findings suggest that both nicotine dependence and the degree to which participants associate pleasurable activities with smoking have complex, rather than straightforward linear, relationships with abstention.
 
 
+\btwocol
 
-```{r, fig.height=2.4, fig.width=6.5, fig.cap="Relationship between FTCD Score and Estimates"}
+```{r, fig.height=2.4, fig.cap="Relationship between FTCD Score and Estimates"}
 
 # FTCD
 
@@ -1158,8 +1167,9 @@ print(ftcd_plot)
 
 
 
-```{r, fig.cap="Relationship between Hedonsum Score and Estimates", eval=F}
-### Plot omitted in revision as this is no longer significant
+```{r, fig.cap="Relationship between Hedonsum Score and Estimates", fig.height=2.4, eval=T}
+### Note: interesting dynamic where when B <- 1000 this is no longer significant,
+### but when B <- 6000 it is. Volitile results.
 
 
 # Hedonsum
@@ -1185,7 +1195,8 @@ plot_data <- data.frame(
 # plot log odds
 p1 <- ggplot(plot_data, aes(x = hedonsum_score, y = log_odds)) +
   geom_line() +
-  theme_minimal() +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   labs(x = "Hedonsum Score", 
        y = "Predicted Log Odds",
        title = "")
@@ -1193,7 +1204,8 @@ p1 <- ggplot(plot_data, aes(x = hedonsum_score, y = log_odds)) +
 # plot probabilities
 p2 <- ggplot(plot_data, aes(x = hedonsum_score, y = probability)) +
   geom_line() +
-  theme_minimal() +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   labs(x = "Hedonsum Score", 
        y = "Predicted Probability",
        title = "")
@@ -1208,7 +1220,7 @@ print(hedon_plot)
 ```
 
 
-
+\etwocol
 
 
 
@@ -1252,7 +1264,8 @@ if (length(extra_cols) > 0) {
 }
 
 model_data_valid_full <- model_data_valid_full[, master_coef_names] # reorder
-predictor_coefs <- coef_ci_sparse$Median
+#predictor_coefs <- coef_ci_sparse$Median
+predictor_coefs <- coef_ci_sparse$Primary_Estimate # NOTE: changed from using $Median
 names(predictor_coefs) <- coef_ci_sparse$Predictor
 predictor_coefs <- predictor_coefs[master_coef_names] # ensure match
 
@@ -1300,7 +1313,7 @@ roc_valid <- roc(validation_data$abst, validation_data$pred_prob)
 roc_train <- roc(data_complete_cc$abst, data_complete_cc$pred_prob)
 
 # plot ROC curves
-plot(roc_train, col = "red", main = "Lasso ROC")
+plot(roc_train, col = "red", main = "")
 plot(roc_valid, add = TRUE, col = "blue")
 legend("bottomright",
        legend = c(paste("Validation, AUC=", round(roc_valid$auc, 4)),
@@ -1331,7 +1344,7 @@ qqline(data_complete_cc$residuals)
 
 
 
-```{r, fig.cap="Lasso Calibration Plot on Validation Data"}
+```{r, fig.cap="Lasso Calibration Plot: Validation Data"}
 
 # calibration plot
 num_cuts <- 24
@@ -1363,7 +1376,7 @@ ggplot(test_calib) +
   labs(x = "Expected Proportion",
        y = "Observed Proportion",
        title="") +
-  theme_bw()
+  theme_bw() + theme(legend.position = "bottom")
 ```
 
 
@@ -1654,14 +1667,14 @@ for (b in 1:B) {
 ```
 
 ```{r, eval = F}
-saveRDS(coef_matrix, file = "moderators_coef_CI-fix_1k.rds")
-saveRDS(nonzero_matrix, file = "moderators_nonzero_CI-fix_1k.rds")
+saveRDS(coef_matrix, file = "moderators_coef_CI-fix_6k.rds")
+saveRDS(nonzero_matrix, file = "moderators_nonzero_CI-fix_6k.rds")
 
 ```
 
 ```{r, eval = T}
-coef_matrix <- readRDS(file = "moderators_coef_CI-fix_1k.rds")
-nonzero_matrix <- readRDS(file = "moderators_nonzero_CI-fix_1k.rds")
+coef_matrix <- readRDS(file = "moderators_coef_CI-fix_6k.rds")
+nonzero_matrix <- readRDS(file = "moderators_nonzero_CI-fix_6k.rds")
 
 ```
 
@@ -1694,6 +1707,7 @@ coef_ci <- data.frame(
   Proportion_Nonzero = proportion_nonzero
 )
 
+coef_ci$Primary_Estimate <- aligned_primary_coef
 
 
 ```
@@ -1702,13 +1716,14 @@ coef_ci <- data.frame(
 ```{r, eval = F}
 
 # plot the CIs
-ggplot(coef_ci, aes(x = Predictor, y = Median)) +
+ggplot(coef_ci[-1,], aes(x = Predictor, y = Median)) +
   geom_point() +
+  geom_point(aes(y=Primary_Estimate), color = "red") +
   geom_errorbar(aes(ymin = Lower_2.5, ymax = Upper_97.5), width = 0.2) +
+  coord_flip() +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   labs(
-    title = "Bootstrap Confidence Intervals for Lasso Coefficients",
     y = "Coefficient Estimate",
     x = "Predictors"
   )
@@ -1735,7 +1750,12 @@ ggplot(coef_ci, aes(x = Predictor, y = Proportion_Nonzero)) +
 # --- Enforce Sparsity ---
 
 # first criteria
-threshold <- .90 # make this dynamic later
+# note: from experimentation we see (for the B <- 6000 case) when threshold is set
+# to .60, no additional variables are zeroed (no additional sparsity). the model 
+# over-fits in this case. however, when threshold is moved to even .605, just one 
+# variable is zeroed out which causes the calibration to improve but destroys the 
+# AUC / discriminative ability. very interesting behavior to study later.
+threshold <- .60 
 predictors_to_keep <- names(proportion_nonzero)[proportion_nonzero >= threshold]
 coef_matrix_sparse <- coef_matrix
 
@@ -1743,6 +1763,8 @@ coef_matrix_sparse <- coef_matrix
 predictors_to_zero <- setdiff(colnames(coef_matrix_sparse), predictors_to_keep)
 
 # second criteria
+# note: from experimentation we know this second criteria doesn't cause any coefs 
+# to go to zero in the tested setting (B = 6000).
 zero_ci_predictors <- coef_ci$Predictor[
   round(coef_ci$Median, 4) == 0 &
   round(coef_ci$Lower_2.5, 4) == 0 &
@@ -1750,10 +1772,13 @@ zero_ci_predictors <- coef_ci$Predictor[
 
 predictors_to_zero <- union(predictors_to_zero, zero_ci_predictors)
 
-# zero out the coefs 
+# zero out the coefs
 if(length(predictors_to_zero) > 0){
   coef_matrix_sparse[, predictors_to_zero] <- 0
+  aligned_primary_coef[predictors_to_zero] <- 0
 }
+
+# coef_matrix_sparse <- coef_matrix # Uncomment to test not enforcing sparsity
 
 coef_mean <- colMeans(coef_matrix_sparse, na.rm = TRUE)
 coef_median <- apply(coef_matrix_sparse, 2, median, na.rm = TRUE)
@@ -1763,6 +1788,7 @@ proportion_nonzero <- colSums(nonzero_matrix, na.rm = TRUE) / sum(nonzero_matrix
 
 coef_ci_sparse <- data.frame(
   Predictor = colnames(coef_matrix_sparse),
+  Primary_Estimate = aligned_primary_coef,
   Mean = coef_mean,
   Median = coef_median,
   Lower_2.5 = coef_lower,
@@ -1780,7 +1806,8 @@ coef_ci_sparse <- data.frame(
 
 coef_ci_sparse <- coef_ci_sparse %>%
   mutate(
-    Odds_Ratio = exp(Median)  # Odds Ratio
+    #Odds_Ratio = exp(Median)  # Odds Ratio
+    Odds_Ratio = exp(Primary_Estimate)  # Odds Ratio (now using main lasso est.)
   )
 
 coef_ci_sparse <- coef_ci_sparse %>%
@@ -1800,6 +1827,8 @@ coef_ci_sparse <- coef_ci_sparse %>%
 table_data <- coef_ci_sparse %>%
   select(
     Predictor,
+    Primary_Estimate,
+    Mean,
     Median,
     Odds_Ratio,
     Lower_2.5,
@@ -1808,6 +1837,8 @@ table_data <- coef_ci_sparse %>%
     Significant
   ) %>%
   rename(
+    "Estimate (Primary)" = Primary_Estimate,
+    "Estimate (Mean)" = Mean,
     "Estimate (Median)" = Median,
     "Odds Ratio" = Odds_Ratio,
     "Lower 2.5%" = Lower_2.5,
@@ -1829,13 +1860,15 @@ table_data_significant %>%
     digits = 3,               
     caption = "Lasso Regression Coefficient Estimates"  
   ) %>%
-  column_spec(1, width = "4cm", latex_valign = "m") %>%  
-  column_spec(2, width = "2cm", latex_valign = "m") %>%   
-  column_spec(3, width = "2cm", latex_valign = "m") %>%   
-  column_spec(4, width = "2cm", latex_valign = "m") %>%   
-  column_spec(5, width = "2cm", latex_valign = "m") %>%   
-  column_spec(6, width = "2cm", latex_valign = "m") %>%    
-  column_spec(7, width = ".5cm", latex_valign = "m") %>%   
+  column_spec(1, width = "3.2cm", latex_valign = "m") %>%  
+  column_spec(2, width = "1.5cm", latex_valign = "m") %>%   
+  column_spec(3, width = "1.5cm", latex_valign = "m") %>%   
+  column_spec(4, width = "1.5cm", latex_valign = "m") %>%   
+  column_spec(5, width = "1.5cm", latex_valign = "m") %>%   
+  column_spec(6, width = "1.5cm", latex_valign = "m") %>%   
+  column_spec(7, width = "1.5cm", latex_valign = "m") %>%   
+  column_spec(8, width = "1.5cm", latex_valign = "m") %>%    
+  column_spec(9, width = ".5cm", latex_valign = "m") %>%   
   kable_styling(
     font_size = 7.6,                                     
     latex_options = c("repeat_header", "striped"),      
@@ -1953,7 +1986,8 @@ if (length(extra_cols) > 0) {
 }
 
 model_data_valid_full <- model_data_valid_full[, master_coef_names] # reorder
-predictor_coefs <- coef_ci_sparse$Median
+#predictor_coefs <- coef_ci_sparse$Median
+predictor_coefs <- coef_ci_sparse$Primary_Estimate # NOTE: changed from using $Median
 names(predictor_coefs) <- coef_ci_sparse$Predictor
 predictor_coefs <- predictor_coefs[master_coef_names] # ensure match
 
@@ -2001,7 +2035,7 @@ roc_valid <- roc(validation_data$abst, validation_data$pred_prob)
 roc_train <- roc(data_complete_cc$abst, data_complete_cc$pred_prob)
 
 # plot ROC curves
-plot(roc_train, col = "red", main = "Lasso ROC")
+plot(roc_train, col = "red", main = "")
 plot(roc_valid, add = TRUE, col = "blue")
 legend("bottomright",
        legend = c(paste("Validation, AUC=", round(roc_valid$auc, 4)),
@@ -2032,7 +2066,7 @@ qqline(data_complete_cc$residuals)
 
 
 
-```{r, fig.cap="Lasso Calibration Plot on Validation Data"}
+```{r, fig.cap="Lasso Calibration Plot: Validation Data"}
 
 # calibration plot
 num_cuts <- 24
@@ -2064,7 +2098,7 @@ ggplot(test_calib) +
   labs(x = "Expected Proportion",
        y = "Observed Proportion",
        title="") +
-  theme_bw()
+  theme_bw() + theme(legend.position = "bottom")
 
 ```
 
