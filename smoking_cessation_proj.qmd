@@ -522,6 +522,11 @@ Results are presented for bootstrapped Lasso regression on outcome abstinence, i
 
 ```{r main effects lasso w bootstrap}
 #GOOD; Q1; baseline
+# Def All Params
+B <- 200      # num of bootstraps 
+m <- 5       # num of multiple imputations per bootstrap
+k <- 5       # num of cv folds for cv.glmnet
+poly_degree <- 3  # degree for polynomial terms
 
 # remove id 
 data_complete <- data %>% select(-id) 
@@ -584,14 +589,11 @@ nonzero_matrix <- matrix(0, nrow = B, ncol = total_coeffs)
 colnames(nonzero_matrix) <- master_coef_names
 
 
+```
 
+```{r main effects coef lasso, eval = F}
 
 # --- Main estimation and bootstrap loop ---
-# Def All Params
-B <- 200      # num of bootstraps 
-m <- 5       # num of multiple imputations per bootstrap
-k <- 5       # num of cv folds for cv.glmnet
-poly_degree <- 3  # degree for polynomial terms
 
 # --- Primary model fit on original data with imputation ---
 # Initial imputation for primary fit
@@ -679,6 +681,10 @@ colnames(coef_matrix) <- master_coef_names
 nonzero_matrix <- matrix(0, nrow = B, ncol = length(master_coef_names))
 colnames(nonzero_matrix) <- master_coef_names
 
+
+```
+
+```{r main effects bootstrap loop, eval = F}
 set.seed(1)
 for (b in 1:B) {
   cat("Bootstrap iteration:", b, "of", B, "\n")
@@ -841,8 +847,26 @@ ggplot(coef_ci, aes(x = Predictor, y = Proportion_Nonzero)) +
 ```{r}
 # --- Enforce Sparsity ---
 
-# Note: this is essentially skipped in this regression run because only having
-# main effects in the model allows for few enough parameters that we are not overfitting.
+# first criteria
+threshold <- .85 # make this dynamic later
+predictors_to_keep <- names(proportion_nonzero)[proportion_nonzero >= threshold]
+coef_matrix_sparse <- coef_matrix
+
+# columns (predictors) to zero out
+predictors_to_zero <- setdiff(colnames(coef_matrix_sparse), predictors_to_keep)
+
+# second criteria
+zero_ci_predictors <- coef_ci$Predictor[
+  round(coef_ci$Median, 4) == 0 &
+  round(coef_ci$Lower_2.5, 4) == 0 &
+  round(coef_ci$Upper_97.5, 4) == 0]
+
+predictors_to_zero <- union(predictors_to_zero, zero_ci_predictors)
+
+# zero out the coefs 
+if(length(predictors_to_zero) > 0){
+  coef_matrix_sparse[, predictors_to_zero] <- 0
+}
 
 coef_matrix_sparse <- coef_matrix
 
@@ -1179,7 +1203,7 @@ qqline(data_complete_cc$residuals)
 ```{r, fig.cap="Lasso Calibration Plot on Validation Data"}
 
 # calibration plot
-num_cuts <- 100
+num_cuts <- 24
 
 # calibration for validation data
 test_calib <- data.frame(
@@ -1227,9 +1251,14 @@ Our moderator analysis revealed that anhedonia `shaps_score_pq1` significantly m
 
 
 
-```{r}
+```{r interactions lasso w bootstrap}
 #GOOD; Q2; Moderator (INTERACTION MODEL TO BE UPDATED)
-#
+# Def All Params
+B <- 200      # num of bootstraps
+m <- 5       # num of multiple imputations per bootstrap
+k <- 5       # num of cv folds for cv.glmnet
+poly_degree <- 3  # degree for polynomial terms
+
 # remove id 
 data_complete <- data %>% select(-id) 
 
@@ -1286,14 +1315,11 @@ master_model_matrix <- model.matrix(full_formula, data = data_complete)
 master_coef_names <- colnames(master_model_matrix)
 total_coeffs <- length(master_coef_names)
 
+```
 
+```{r interactions coef lasso, eval = F}
 
 # --- Main estimation and bootstrap loop ---
-# Def All Params
-B <- 200      # num of bootstraps
-m <- 5       # num of multiple imputations per bootstrap
-k <- 5       # num of cv folds for cv.glmnet
-poly_degree <- 3  # degree for polynomial terms
 
 
 # --- Primary model fit with imputation ---
@@ -1392,6 +1418,9 @@ colnames(coef_matrix) <- master_coef_names
 nonzero_matrix <- matrix(0, nrow = B, ncol = length(master_coef_names))
 colnames(nonzero_matrix) <- master_coef_names
 
+```
+
+```{r interactions bootstrap loop, eval = F}
 set.seed(1)
 for (b in 1:B) {
   cat("Bootstrap iteration:", b, "of", B, "\n")
