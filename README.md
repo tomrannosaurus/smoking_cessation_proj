@@ -31,6 +31,8 @@ Lasso regression with bootstrap confidence interval estimates identified meaning
    - moments: 0.14.1
    - vcd: 1.4-12
    - glmnet 4.1-8   - mice 3.16.0   - caret 6.0-94   - pROC 1.18.4
+	- gt 0.9.0
+	- gtsummary 1.7.2
 
 ## Files
 
