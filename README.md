@@ -12,6 +12,8 @@ We examine data from a randomized, placebo-controlled 2x2 factorial design study
 ## Results: 
 The participant's Fagerstrom Test for Cigarette Dependence score and the participant's Nicotine Metabolite Ratio were baseline predictors of abstinence controlling for treatment type. The models demonstrated fair to good discriminative ability. Our moderator analysis demonstrated that no variables could be identified as potential moderators of the therapy based treatment (BA or ST).
 
+**Baseline Model**
+
 | Predictor                                | Estimate (Primary) | Estimate (Mean) | Estimate (Median) | Odds Ratio | Lower 2.5% | Upper 97.5% | Proportion Non-Zero | Sig. |
 |------------------------------------------|---------------------|-----------------|-------------------|------------|------------|--------------|---------------------|------|
 | VarVarenicline                           | 1.789              | 2.389           | 2.264             | 5.983      | 1.015      | 4.535        | 1.000               | Yes  |
@@ -21,7 +23,10 @@ The participant's Fagerstrom Test for Cigarette Dependence score and the partici
 | poly(hedonsum_y_pq1, 3, raw = TRUE)1     | -0.157             | -0.205          | -0.201            | 0.855      | -0.431     | -0.008       | 0.999               | Yes  |
 | logNMR                                   | 2.183              | 1.367           | 1.314             | 8.877      | 0.449      | 2.598        | 1.000               | Yes  |
 
-
+**Moderator Model**
+| Predictor       | Estimate (Primary) | Estimate (Mean) | Estimate (Median) | Odds Ratio | Lower 2.5% | Upper 97.5% | Proportion Non-Zero | Sig. |
+|-----------------|---------------------|-----------------|-------------------|------------|------------|--------------|---------------------|------|
+| VarVarenicline | 2.115              | 8.989           | 6.939            | 8.292      | 2.442      | 27.204       | 1                   | Yes  |
 
 
 ## Conclusion: 
