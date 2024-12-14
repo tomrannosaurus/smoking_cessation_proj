@@ -97,13 +97,12 @@ Note: "vspace" below reduces space between title and first paragraph.
 
 *TODO* **-- Overall**
 [x] Previously coefficient estimates happened within the bootstrap, update to use single primary lasso for coefficient estimates and focus bootstrap on CI
-[x] Check for all cascading consequences of this change above
+[] Check for all cascading consequences of this change above
 [] Fix variable names versus English names throughout
-[] Make sure figure numbers are correctly referenced
 [] Fix BA abbreviation to always use BA not BASC
 [] Ensure consistent case for "Lasso" throughout
 [x] Fix code for using bootstrap only for CI
-[x] Fix hard coded numeric values from model results within prose
+[] Fix hard coded numeric values from model results within prose
 
 ***Reflection***
 Why increase bootstrap iterations? Why handling the coefficient estimate outside of the bootstrap?
@@ -129,7 +128,7 @@ Background: Individuals with past or present major depressive disorder (MDD) exp
 Methods: We examine data from a randomized, placebo-controlled 2x2 factorial design study of 300 smokers with past or present MDD, who received either placebo or varenicline and standard treatment (ST) or behavioral activation for smoking cessation (BA). Missing data was imputed through multiple imputation. A cross-validated Lasso was applied at the optimally chosen value of $\lambda$ for coefficient estimates. Subsequently a bootstrap procedure is carried out to estimate confidence intervals and assess significance of the coefficients.
 
 
-Results: The participant's Fagerstrom Test for Cigarette Dependence score, complementary reinforcers (i.e., pleasurable events associated with smoking), and the participant's Nicotine Metabolite Ratio were all baseline predictors of abstinence controlling for treatment type. The models demonstrated fair to good discriminative ability. Our moderator analysis demonstrated that no variables could be identified as potential moderators of the therapy based treatment (BA or ST).
+Results: The participant's Fagerstrom Test for Cigarette Dependence score, complementary reinforcers (i.e., pleasurable events associated with smoking), and the log of participant's Nicotine Metabolite Ratio were all baseline predictors of abstinence controlling for treatment type. The model demonstrated good discriminative ability (validation AUC=*TODO: XXX*). Our moderator analysis demonstrated that no variables could be identified as potential moderators of the therapy based treatment (BA or ST).
 
 
 Conclusion: Lasso regression with bootstrap confidence interval estimates identified meaningful predictors of abstinence noted above. We were unable to identify treatment effect moderators. Limitations include the relatively small sample size, which led to convergence issues and challenges handling class imbalance in the outcome which suggests these findings should be validated in larger studies. Future research might benefit from more sophisticated regularization approaches and larger, more diverse samples to better understand treatment effect heterogeneity in this population.
@@ -565,14 +564,14 @@ Other notable decisions include omission of `Hisp` due to insufficient sample si
 
 We further note that based on our correlation matrix there is a very high correlation (well over 85%) between `NHW` and `Black`. This issue combined with the issue noted previously lead us to also drop the `NHW` variable. We also note that use of only menthol cigarettes is highly correlated with both `NHW`, `Black`, `inc`, and `edu`. This is a concern, but as menthol cigarette use may be a unique trait and we are conducting regularized regression, we elect to leave this variable in the model and allow the penalty to aid our choice. 
 
-We conclude by grouping levels of `edu` and `inc` to limit parameter proliferation and allow for estimation and model convergence, given that Table 1 shows that there is insufficient sample within each level when not grouped. We also note that the continuous covariate NMR is right-skewed and could accommodate a log transformation to encourage normality. Log transforming skewed variables could help by encouraging convergence and simplifying the loss landscape. However, empirical results for model performance in models fit with and without the log transformation on NMR indicate that the model preforms similarly or better without the log transformation. Because interpreting untransformed coefficients is more straightforward than their transformed counterparts, and taking into account the lack of penalty in term of model fit for not transforming, we opt to leave NMR in the raw form. Finally, we note that there is a minor class imbalance issue (~2.1:10). The outcome is somewhat rare, and this could lead to model fitting issues. Correcting for this class imbalance is a potential area for improvement and a limitation.
+We conclude by grouping levels of `edu` and `inc` to limit parameter proliferation and allow for estimation and model convergence, given that Table 1 shows that there is insufficient sample within each level when not grouped. We also note that the continuous covariate NMR is right-skewed and could accommodate a log transformation to encourage normality. Log transforming skewed variables helps by encouraging convergence and simplifying the loss landscape. Empirical results for model performance in models fit with and without the log transformation on NMR indicate that the model preforms similarly or better with the log transformation. We opt to log transform NMR (`logNMR`). Finally, we note that there is a minor class imbalance issue (~2.1:10). The outcome is somewhat rare, and this could lead to model fitting issues. Correcting for this class imbalance is a potential area for improvement and a limitation.
 
 :::{.content-hidden}
 *TODO*
 [x] Explain handling of NMR and reasons for decisions
 
 ***Reflection***
-Despite observing that NMR is not normally distributed with a clear right skew, we opt to not apply a log transformation. We choose to not transform NMR because of empirical results (experimentation) that indicates model fit slightly improves when using raw NMR as opposed to the log of NMR (and we do not incur any penalty in terms of slower model fitting due to a more complex loss landscape). This has additional benefits, as the coefficient interpretation of untransformed variables is more simple than their transformed counterparts. The important lesson here is to not make assumptions about how transformation will affect model fit. One should always conduct experiments when making bifurcating choices in modeling pathways to support the decision made (so long as there is not a strong reason to make the decision in question that is unrelated to model fit, as with the polynomial contrasts). This is especially true when the model in question is not a simple linear model. This is in part because GLMs for binary outcomes assume that there is a linear relationship between the log odds of predictors and the outcome, but do not assume linearity between the predictors and the outcome itself. 
+Observing that NMR is not normally distributed with a clear right skew, we opt to apply a log transformation. We choose to transform NMR because of empirical results (experimentation) that indicates model fit slightly improves when using logged NMR as opposed to the raw NMR. The important lesson here is to not make assumptions about how transformation will affect model fit. One should always conduct experiments when making bifurcating choices in modeling pathways to support the decision made (so long as there is not a strong reason to make the decision in question that is unrelated to model fit, as with the polynomial contrasts). This is especially true when the model in question is not a simple linear model. This is in part because GLMs for binary outcomes assume that there is a linear relationship between the log odds of predictors and the outcome, but do not assume linearity between the predictors and the outcome itself. 
 :::
 
 
@@ -611,7 +610,7 @@ ggplot(melt(psuedo_cor_matrix), aes(x = Var2, y = Var1, fill = value)) +
 
 ### Missingness
 
-We examined the amount of missing data by variable and by sample. The most missing data in any single record is two missing variables. There are seven variables missing data. The most missing data exists in `NMR` with 21 missing values (7%). There are 241 complete cases, which would reduce our sample by 59 records. This strongly suggests the need for imputation. After inspecting the data, we ran Little's test for MCAR. The null hypothesis for this test is that the data are not MCAR. The p-value was over 0.05, so we cannot reject the null hypothesis. We conclude that there is evidence that these data are missing completely at random. Missing data in covariates is imputed in two distinct points in our estimation process, once during the coefficient estimation process and again within the bootstrap loop used for confidence interval estimation (additional details are in the section below). 
+We examined the amount of missing data by variable and by sample. The most missing data in any single record is two missing variables. There are seven variables missing data. The most missing data exists in NMR with 21 missing values (7%). There are 241 complete cases, which would reduce our sample by 59 records. This strongly suggests the need for imputation. After inspecting the data, we ran Little's test for MCAR. The null hypothesis for this test is that the data are not MCAR. The p-value was over 0.05, so we cannot reject the null hypothesis. We conclude that there is evidence that these data are missing completely at random. Missing data in covariates is imputed in two distinct points in our estimation process, once during the coefficient estimation process and again within the bootstrap loop used for confidence interval estimation (additional details are in the section below). 
 
 ```{r missingness, eval = F}
 
@@ -699,8 +698,8 @@ data <- data %>%
          )
 
 data <- data %>%
-  #mutate(NMR = log(NMR)) %>% # Toggle off to test model fit w/o transform
-  select(-c(Hisp, NHW))
+  mutate(logNMR = log(NMR)) %>% # Toggle off to test model fit w/o transform
+  select(-c(NMR, Hisp, NHW))
 
 ```
 
@@ -727,7 +726,7 @@ data <- train_data
 
 :::{.content-hidden}
 *TODO*
-[x] Update Baseline section to match new results and new workflow
+[] Update Baseline section to match new results and new workflow
 
 ***Reflection***
 N/A
@@ -738,7 +737,7 @@ Results are presented for bootstrapped Lasso regression on outcome abstinence, i
 ```{r main effects lasso w bootstrap}
 #GOOD; Q1; baseline
 # Def All Params
-B <- 1000      # num of bootstraps 
+B <- 6000      # num of bootstraps 
 m <- 5       # num of multiple imputations per bootstrap
 k <- 5       # num of cv folds for cv.glmnet
 poly_degree <- 3  # degree for polynomial terms, set to 1 to test model fit w/o poly
@@ -995,14 +994,14 @@ for (b in 1:B) {
 ```
 
 ```{r, eval = F}
-saveRDS(coef_matrix, file = "baseline_coef_CI-fix_6k-NMR.rds")
-saveRDS(nonzero_matrix, file = "baseline_nonzero_CI-fix_6k-NMR.rds")
+saveRDS(coef_matrix, file = "baseline_coef_CI-fix_6k.rds")
+saveRDS(nonzero_matrix, file = "baseline_nonzero_CI-fix_6k.rds")
 
 ```
 
 ```{r, eval = T}
-coef_matrix <- readRDS(file = "baseline_coef_CI-fix_6k-NMR.rds")
-nonzero_matrix <- readRDS(file = "baseline_nonzero_CI-fix_6k-NMR.rds")
+coef_matrix <- readRDS(file = "baseline_coef_CI-fix_6k.rds")
+nonzero_matrix <- readRDS(file = "baseline_nonzero_CI-fix_6k.rds")
 
 ```
 
@@ -1098,7 +1097,7 @@ coef_ci_sparse <- data.frame(
 ```
 
 
-There are four significant baseline predictors of abstinence: `ftcd_score`, `Var`, `hedonsum_y_pq1`, and `NMR`. Varenicline treatment showed a strong positive association with abstinence (OR = `r round(exp(coef_ci_sparse[["VarVarenicline","Primary_Estimate"]]),2)`, 95% CI (OR): `r round(exp(coef_ci_sparse[["VarVarenicline","Lower_2.5"]]),2)`-`r round(exp(coef_ci_sparse[["VarVarenicline","Upper_97.5"]]),2)`), with participants receiving varenicline having about `r round(exp(coef_ci_sparse[["VarVarenicline","Primary_Estimate"]]),0)` times higher odds of achieving abstinence compared to those receiving placebo, consistent with prior literature on varenicline's efficacy. Additionally, nicotine metabolism rate demonstrated a positive relationship with abstinence outcomes, with each unit increase in NMR associated with `r round(exp(coef_ci_sparse[["NMR","Primary_Estimate"]]),0)` times higher odds of abstinence (95% CI (OR): `r round(exp(coef_ci_sparse[["NMR","Lower_2.5"]]),2)`-`r round(exp(coef_ci_sparse[["NMR","Upper_97.5"]]),2)`). That NMR predicts abstinence is also understandable, but the direction of the association is unexpected. As noted above, higher NMR indicates faster metabolism of nicotine. Among other potential explanations for this variable's predictive value, individuals with faster nicotine metabolism tend to experience more intense withdrawal symptoms [@liakoni2019effects], as well as greater physical dependence and reward [@sofuoglu2012rapid], presumably making abstinence more difficult. This finding regarding NMR is particularly noteworthy as it appears to diverge from some previous research suggesting faster metabolizers typically experience greater difficulty achieving cessation, though the relationship between metabolism and cessation outcomes is known to be complex and may be treatment-dependent.
+There are four significant baseline predictors of abstinence: `ftcd_score`, `Var`, `hedonsum_y_pq1`, and `logNMR`. Varenicline treatment showed a strong positive association with abstinence (OR = `r round(exp(coef_ci_sparse[["VarVarenicline","Primary_Estimate"]]),2)`, 95% CI (OR): `r round(exp(coef_ci_sparse[["VarVarenicline","Lower_2.5"]]),2)`-`r round(exp(coef_ci_sparse[["VarVarenicline","Upper_97.5"]]),2)`), with participants receiving varenicline having about `r round(exp(coef_ci_sparse[["VarVarenicline","Primary_Estimate"]]),0)` times higher odds of achieving abstinence compared to those receiving placebo, consistent with prior literature on varenicline's efficacy. Additionally, nicotine metabolism rate demonstrated a positive relationship with abstinence outcomes, with each unit increase in log(NMR) associated with `r round(exp(coef_ci_sparse[["logNMR","Primary_Estimate"]]),0)` times higher odds of abstinence (95% CI: `r round(exp(coef_ci_sparse[["logNMR","Lower_2.5"]]),2)`-`r round(exp(coef_ci_sparse[["logNMR","Upper_97.5"]]),2)`). That NMR predicts abstinence is also understandable, but the direction of the association is unexpected. As noted above, higher NMR indicates faster metabolism of nicotine. Among other potential explanations for this variable's predictive value, individuals with faster nicotine metabolism tend to experience more intense withdrawal symptoms [@liakoni2019effects], as well as greater physical dependence and reward [@sofuoglu2012rapid], presumably making abstinence more difficult. This finding regarding NMR is particularly noteworthy as it appears to diverge from some previous research suggesting faster metabolizers typically experience greater difficulty achieving cessation, though the relationship between metabolism and cessation outcomes is known to be complex and may be treatment-dependent.
 
 
 
@@ -1182,7 +1181,7 @@ table_data_significant %>%
 
 
 
-The polynomial variables are difficult to interpret in the same efficient manner as the continuous `NMR` or binary `Var`, therefore we produce plots to enhance our understanding. The FTCD score (`ftcd_score`) demonstrated significant non-linear relationships with abstinence. As visualized in Figure 3, the relationship between FTCD score and abstinence probability follows a complex cubic pattern, with the highest probability of abstinence occurring at low levels of dependence and decreasing non-linearly as the score increases. This relationships between FTCD score (`ftcd_score`) and the outcome are produced while holding all other variables at zero (for numeric variables) or their reference level (for categorical variables). 
+The polynomial variables are difficult to interpret in the same efficient manner as the continuous log of NMR or binary varenicline treatment, therefore we produce plots to enhance our understanding. The FTCD score (`ftcd_score`) and complementary reinforcer score (`hedonsum_y_pq1`) both demonstrated significant non-linear relationships with abstinence. As visualized in Figure 3, the relationship between FTCD score and abstinence probability follows a complex cubic pattern, with the highest probability of abstinence occurring at low levels of dependence and decreasing non-linearly as the score increases. Similarly, `hedonsum_y_pq1` exhibited a non-linear relationship with abstinence (Figure 4), where the probability of abstinence decreased more steeply at higher levels of complementary reinforcement. These relationships between FTCD score (`ftcd_score`) or complementary reinforcement score (`hedonsum_y_pq1`) and the outcome are produced while holding all other variables at zero (for numeric variables) or their reference level (for categorical variables). 
 
 :::{.content-hidden}
 *TODO*
@@ -1193,9 +1192,12 @@ Whenever interpretations and particularly predictive plots are produced, it is i
 :::
 
 
+As discussed in greater detail above, a higher score for complementary reinforcers denotes greater frequency of and/or more enjoyment of activities associated by the participant with smoking. It makes intuitive sense that, as our results suggest, participants whose more frequent and/or more enjoyable pleasurable events are with smoking would have a harder time quitting. For one thing, engaging in those frequent, pleasurable, and smoking-associated activities would likely lead them to wish to smoke.  Moreover, they might have fewer opportunities to engage in  pleasurable activities not associated with smoking, undermining their ability to find alternative sources of reward. These findings suggest that both nicotine dependence and the degree to which participants associate pleasurable activities with smoking have complex, rather than straightforward linear, relationships with abstention.
 
 
-```{r, fig.height=2.4, fig.width=6, fig.cap="Relationship between FTCD Score and Estimates"}
+\btwocol
+
+```{r, fig.height=2.4, fig.cap="Relationship between FTCD Score and Estimates"}
 
 # FTCD
 
@@ -1206,10 +1208,10 @@ ftcd_range <- seq(min(na.omit(data$ftcd_score)),
                   max(na.omit(data$ftcd_score)), length.out = 100)
 
 # calc predicted log odds
-predicted_log_odds <- coef_ci$Primary_Estimate[coef_ci$Predictor == "(Intercept)"] +  
-                     ftcd_coefs$Primary_Estimate[1] * ftcd_range +  
-                     ftcd_coefs$Primary_Estimate[2] * ftcd_range^2 +     
-                     ftcd_coefs$Primary_Estimate[3] * ftcd_range^3        
+predicted_log_odds <- coef_ci$Median[coef_ci$Predictor == "(Intercept)"] +  
+                     ftcd_coefs$Median[1] * ftcd_range +  
+                     ftcd_coefs$Median[2] * ftcd_range^2 +     
+                     ftcd_coefs$Median[3] * ftcd_range^3        
 
 # convert to probabilities
 predicted_probs <- 1/(1 + exp(-predicted_log_odds))
@@ -1254,10 +1256,9 @@ print(ftcd_plot)
 
 
 
-```{r, fig.cap="Relationship between Hedonsum Score and Estimates", fig.height=2.4, eval=F}
+```{r, fig.cap="Relationship between Hedonsum Score and Estimates", fig.height=2.4, eval=T}
 ### Note: interesting dynamic where when B <- 1000 this is no longer significant,
-### but when B <- 6000 it is. Volatile results. 
-### Note: Now when B <- 6000 but NMR is raw not logged, it is again not sig.
+### but when B <- 6000 it is. Volitile results.
 
 
 # Hedonsum
@@ -1266,10 +1267,10 @@ hedon_range <- seq(min(na.omit(data$hedonsum_y_pq1)),
                    max(na.omit(data$hedonsum_y_pq1)), length.out = 100)
 
 # calc predicted log odds
-predicted_log_odds <- coef_ci$Primary_Estimate[coef_ci$Predictor == "(Intercept)"] +  
-                     hedon_coefs$Primary_Estimate[1] * hedon_range +     
-                     hedon_coefs$Primary_Estimate[2] * hedon_range^2 +      
-                     hedon_coefs$Primary_Estimate[3] * hedon_range^3               
+predicted_log_odds <- coef_ci$Median[coef_ci$Predictor == "(Intercept)"] +  
+                     hedon_coefs$Median[1] * hedon_range +     
+                     hedon_coefs$Median[2] * hedon_range^2 +      
+                     hedon_coefs$Median[3] * hedon_range^3               
 
 # convert to probabilities
 predicted_probs <- 1/(1 + exp(-predicted_log_odds))
@@ -1308,6 +1309,7 @@ print(hedon_plot)
 ```
 
 
+\etwocol
 
 
 
@@ -1469,7 +1471,7 @@ ggplot(test_calib) +
 \etwocol
 
 
-The model's discriminative ability was assessed using ROC curves and calibration plots (Figures 4 and 5). The Lasso model demonstrated good discriminative performance with an AUC of `r round(roc_valid$auc, 4)` on the validation set, though some overfitting is suggested by the higher training AUC of `r round(roc_train$auc, 4)`. The calibration plot reveals generally good agreement between predicted and observed probabilities at all ranges but shows increasing uncertainty at very high and very low probability ranges, as evidenced by the widening confidence bands around the Loess curve. The overall calibration suggests the model provides reasonably reliable probability estimates, especially in the more commonly observed lower probability ranges.
+The model's discriminative ability was assessed using ROC curves and calibration plots (Figures 4 and 5). The Lasso model demonstrated good discriminative performance with an AUC of `r round(roc_valid$auc, 4)` on the validation set, though some overfitting is suggested by the higher training AUC of `r round(roc_valid$auc, 4)`. The calibration plot reveals generally good agreement between predicted and observed probabilities at lower ranges, *TODO but shows increasing uncertainty at higher probability ranges, as evidenced by the widening confidence bands around the Loess curve. This pattern is not unexpected given the class imbalance in our data. The overall calibration suggests the model provides reasonably reliable probability estimates, especially in the more commonly observed lower probability ranges.*
 
 
 
@@ -1478,7 +1480,7 @@ The model's discriminative ability was assessed using ROC curves and calibration
 
 :::{.content-hidden}
 *TODO*
-[x] Update moderator section to match new results and new workflow
+[] Update moderator section to match new results and new workflow
 
 ***Reflection***
 N/A
@@ -1756,14 +1758,14 @@ for (b in 1:B) {
 ```
 
 ```{r, eval = F}
-saveRDS(coef_matrix, file = "moderators_coef_CI-fix_6k-NMR.rds")
-saveRDS(nonzero_matrix, file = "moderators_nonzero_CI-fix_6k-NMR.rds")
+saveRDS(coef_matrix, file = "moderators_coef_CI-fix_6k.rds")
+saveRDS(nonzero_matrix, file = "moderators_nonzero_CI-fix_6k.rds")
 
 ```
 
 ```{r, eval = T}
-coef_matrix <- readRDS(file = "moderators_coef_CI-fix_6k-NMR.rds")
-nonzero_matrix <- readRDS(file = "moderators_nonzero_CI-fix_6k-NMR.rds")
+coef_matrix <- readRDS(file = "moderators_coef_CI-fix_6k.rds")
+nonzero_matrix <- readRDS(file = "moderators_nonzero_CI-fix_6k.rds")
 
 ```
 
@@ -1845,7 +1847,7 @@ ggplot(coef_ci, aes(x = Predictor, y = Proportion_Nonzero)) +
 # just one variable is zeroed out which causes the calibration to improve slightly 
 # but destroys the AUC / discriminative ability. very interesting behavior to study 
 # later.
-threshold <- 0 
+threshold <- .60
 predictors_to_keep <- names(proportion_nonzero)[proportion_nonzero >= threshold]
 coef_matrix_sparse <- coef_matrix
 
@@ -1890,7 +1892,8 @@ coef_ci_sparse <- data.frame(
 
 
 
-Results are presented for bootstrapped Lasso regression on the outcome abstinence, with main effects included and unpenalized. Interactions of baseline covariates with `BA` are included and penalized, allowing the Lasso to select the interaction terms of consequence. The coefficients derived from the primary non-bootstrap Lasso fit are noted as such. Only coefficients with confidence intervals not containing zero are presented in the table of results (noted as significant). 
+Results are presented for bootstrapped Lasso regression on the outcome abstinence, with main effects included and unpenalized. Interactions of baseline covariates with `BA` are included and penalized, allowing the Lasso to select the interaction terms of consequence. The coefficients derived from the primary non-bootstrap Lasso fit are noted as such. Only coefficients with confidence intervals not containing zero are presented in the table of results (noted as significant). Our moderator analysis revealed that there were no significant interactions terms and therefore no baseline covariates which conclusively moderate the effect of BA on abstinence. The model also confirmed the robust effect of varenicline *TODO (OR = 816.00, 95% CI: 3.22-15.39),* though the wide confidence interval suggests considerable uncertainty in the effect size estimate.
+
 
 
 
@@ -1973,7 +1976,6 @@ table_data_significant %>%
 
 ```
 
-Our moderator analysis revealed that there were no significant interactions terms and therefore no baseline covariates which conclusively moderate the effect of BA on abstinence. The model also confirmed the robust effect of varenicline (OR = `r round(exp(coef_ci_sparse[["VarVarenicline","Primary_Estimate"]]),2)`, 95% CI (OR): `r round(exp(coef_ci_sparse[["VarVarenicline","Lower_2.5"]]),2)`-`r round(exp(coef_ci_sparse[["VarVarenicline","Upper_97.5"]]),2)`), though the wide confidence interval suggests considerable uncertainty in the effect size estimate.
 
 
 ```{r, fig.cap="Relationship between SHAPS Score and Estimates", eval = F}
@@ -2200,7 +2202,7 @@ ggplot(test_calib) +
 
 \etwocol
 
-The diagnostic plots for the moderator analysis (Figures 6 and 7) suggest more modest model performance compared to our main effects model. The ROC curves show fair discriminative ability with an AUC of `r round(roc_valid$auc, 4)` on the validation set and `r round(roc_train$auc, 4)` on the training set. This decreased performance relative to our previous model likely reflects the increased complexity introduced by interaction terms and the inherent difficulty in predicting treatment effect heterogeneity especially in small samples. This pattern is clearly indicative of overfitting which is unsurprising given the large number of parameters and small amount of data.. We note this overfitting is stubborn insofar as manually enforcing sparsity in coefficients by thresholding narrows the gap between test and train AUC, but at the expense of overall performance. The calibration plot reveals deviations from the ideal diagonal, with the model showing a tendency toward under-prediction at higher probabilities. The wide confidence bands around the meandering Loess curve indicate considerable uncertainty in these predictions. Despite these limitations, the diagnostic plots suggest the model provides fairly reliable probability estimates, but does tend to overfit the data. 
+The diagnostic plots for the moderator analysis (Figures 7 and 8) suggest more modest model performance compared to our main effects model. The ROC curves show fair discriminative ability with an AUC of *TODO 0.59* on the validation set and *TODO 0.67* on the training set. This decreased performance relative to our previous model likely reflects the increased complexity introduced by interaction terms and the inherent difficulty in predicting treatment effect heterogeneity especially in small samples. We also note that the separation between ROC curves for the validation versus training set, where the training curve has a much higher AUC, is indicative of overfitting which is unsurprising given the large number of parameters and small amount of data. The calibration plot reveals deviations from the ideal diagonal, *TODO with the model showing a tendency toward over-optimistic predictions in the mid-range probabilities and under-prediction at higher probabilities.* *TODO The wide confidence bands around the Loess curve indicate considerable uncertainty in these predictions.* Despite these limitations, the diagnostic plots suggest the model provides fairly reliable probability estimates, but does tend to overfit the data. 
 
 
 
@@ -2215,10 +2217,11 @@ N/A
 :::
 
 
-In this reanalysis of the BASC-Varenicline trial data, we identified several important predictors of smoking cessation success among individuals with current or past MDD. Our primary analysis confirmed varenicline's strong positive effect on abstinence and revealed complex non-linear relationships between cessation success and baseline characteristics such as nicotine dependence (FTCD score). Notably, higher nicotine metabolism rates were associated with improved cessation outcomes, a finding that warrants further investigation given its divergence from some previous research. 
+In this reanalysis of the BASC-Varenicline trial data, we identified several important predictors of smoking cessation success among individuals with current or past MDD. Our primary analysis confirmed varenicline's strong positive effect on abstinence and revealed complex non-linear relationships between cessation success and baseline characteristics including nicotine dependence (FTCD score) and complementary reinforcement. Notably, higher nicotine metabolism rates were associated with improved cessation outcomes, a finding that warrants further investigation given its divergence from some previous research. 
 
 Several limitations of our analysis warrant discussion. First, our analytical approach was constrained by sample size limitations, which led to the exclusion of Hispanic ethnicity data due to insufficient representation (n=18) and necessitated the grouping of educational and income categories to ensure model convergence. Second, the class imbalance in our outcome (21.33% abstinent) posed challenges for model fitting and likely contributed to the decreased accuracy of predictions at higher probability ranges, particularly in our moderator analysis. Third, convergence issues stemming from our relatively small sample size and numerous dichotomous variables limited our ability to employ more sophisticated regularization approaches. Finally, despite doing 6,000 bootstrap iterations, if given more time larger bootstrap runs would be welcome. Future analyses with larger samples might benefit from exploring alternative methods such as L0 best subset selection, L0+L2 regularization, relaxed Lasso, group Lasso, or hierarchical Lasso, which could potentially offer improved variable selection and prediction accuracy.
 
+Despite these limitations, our findings suggest that baseline characteristics, particularly anhedonia levels, could inform the personalization of smoking cessation treatments for individuals with current or past MDD. The identified moderating effect of anhedonia on BA treatment efficacy may be valuable for clinical decision-making, though the modest predictive performance of our moderator model suggests that additional research is needed to validate and refine these findings.
 
 
 
